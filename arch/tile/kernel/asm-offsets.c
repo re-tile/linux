@@ -14,6 +14,8 @@
  * Generates definitions from c-type structures used by assembly sources.
  */
 
+#define COMPILE_OFFSETS
+
 /* Check for compatible compiler early in the build. */
 #ifdef CONFIG_TILEGX
 # ifndef __tilegx__

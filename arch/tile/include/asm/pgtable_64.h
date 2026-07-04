@@ -59,7 +59,6 @@
 #ifndef __ASSEMBLY__
 
 /* We have no pud since we are a three-level page table. */
-#define __ARCH_USE_5LEVEL_HACK
 #include <asm-generic/pgtable-nopud.h>
 
 /*
@@ -69,7 +68,7 @@
 #define pmdp_ptep(pmdp) (pmdp)
 #define pte_pmd(pte) (pte)
 
-#define pud_pte(pud) ((pud).pgd)
+#define pud_pte(pud) ((pud).p4d.pgd)
 
 static inline int pud_none(pud_t pud)
 {
@@ -91,7 +90,7 @@ static inline int pud_huge_page(pud_t pud)
 
 static inline void pud_clear(pud_t *pudp)
 {
-	__pte_clear(&pudp->pgd);
+	__pte_clear(&pudp->p4d.pgd);
 }
 
 static inline int pud_bad(pud_t pud)
@@ -100,7 +99,7 @@ static inline int pud_bad(pud_t pud)
 }
 
 /* Return the page-table frame number (ptfn) that a pud_t points at. */
-#define pud_ptfn(pud) hv_pte_get_ptfn((pud).pgd)
+#define pud_ptfn(pud) hv_pte_get_ptfn((pud).p4d.pgd)
 
 /* Return the page frame number (pfn) that a pud_t points at. */
 #define pud_pfn(pud) pte_pfn(pud_pte(pud))

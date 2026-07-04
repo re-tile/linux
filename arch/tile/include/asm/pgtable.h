@@ -505,7 +505,7 @@ static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
        return (pte_t *)pmd_page_vaddr(*pmd) + pte_index(address);
 }
 
-#include <asm-generic/pgtable.h>
+
 
 /* Support /proc/NN/pgtable API. */
 struct seq_file;

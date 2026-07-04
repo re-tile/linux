@@ -15,7 +15,17 @@
 #ifndef _ASM_TILE_LINKAGE_H
 #define _ASM_TILE_LINKAGE_H
 
-#include <feedback.h>
+/*
+ * Historically <feedback.h> from the Tilera toolchain's own include dir,
+ * which modern kbuild no longer puts on the search path.  The kernel never
+ * enables feedback instrumentation, so these are the toolchain's stubs.
+ */
+#ifdef __ASSEMBLER__
+#define FEEDBACK_ENTER_EXPLICIT(FUNCNAME, SECNAME, SIZE)
+#define FEEDBACK_ENTER(FUNCNAME)
+#define FEEDBACK_REENTER(FUNCNAME)
+#define FEEDBACK_ENTRY(FUNCNAME, SECNAME, SIZE)
+#endif
 
 #define __ALIGN .align 8
 
