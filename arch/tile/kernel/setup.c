@@ -55,9 +55,14 @@ char chip_model[64] __ro_after_init;
 struct screen_info screen_info;
 #endif
 
-/* Information on the NUMA nodes that we compute early */
-unsigned long node_start_pfn[MAX_NUMNODES];
-unsigned long node_end_pfn[MAX_NUMNODES];
+/*
+ * Per-controller memory ranges that we compute early.  Without NUMA
+ * MAX_NUMNODES is 1, so these stay dimensioned by the number of mshims
+ * (each hv range has distinct PA high bits, so there are at most
+ * NR_PA_HIGHBIT_VALUES of them); Linux-node bookkeeping stays on node 0.
+ */
+unsigned long node_start_pfn[NR_PA_HIGHBIT_VALUES];
+unsigned long node_end_pfn[NR_PA_HIGHBIT_VALUES];
 
 /*
  * per-CPU stack and boot info.
@@ -77,14 +82,16 @@ unsigned long __initdata boot_pc = (unsigned long)start_kernel;
 
 #ifdef CONFIG_HIGHMEM
 /* Page frame index of end of lowmem on each controller. */
-unsigned long node_lowmem_end_pfn[MAX_NUMNODES];
+unsigned long node_lowmem_end_pfn[NR_PA_HIGHBIT_VALUES];
 
 /* Number of pages that can be mapped into lowmem. */
 static unsigned long __initdata mappable_physpages;
 #endif
 
 /* Data on which physical memory controller corresponds to which NUMA node */
-int node_controller[MAX_NUMNODES] = { [0 ... MAX_NUMNODES-1] = -1 };
+int node_controller[NR_PA_HIGHBIT_VALUES] = {
+	[0 ... NR_PA_HIGHBIT_VALUES-1] = -1
+};
 
 #ifdef CONFIG_HIGHMEM
 /* Map information from VAs to PAs */
@@ -103,8 +110,8 @@ int highbits_to_node[NR_PA_HIGHBIT_VALUES] __ro_after_init;
 EXPORT_SYMBOL(highbits_to_node);
 
 static unsigned int __initdata maxmem_pfn = -1U;
-static unsigned int __initdata maxnodemem_pfn[MAX_NUMNODES] = {
-	[0 ... MAX_NUMNODES-1] = -1U
+static unsigned int __initdata maxnodemem_pfn[NR_PA_HIGHBIT_VALUES] = {
+	[0 ... NR_PA_HIGHBIT_VALUES-1] = -1U
 };
 static nodemask_t __initdata isolnodes;
 
@@ -135,7 +142,7 @@ static int __init setup_maxnodemem(char *str)
 	unsigned long node;
 
 	node = str ? simple_strtoul(str, &endp, 0) : INT_MAX;
-	if (node >= MAX_NUMNODES || *endp != ':')
+	if (node >= NR_PA_HIGHBIT_VALUES || *endp != ':')
 		return -EINVAL;
 
 	maxnodemem = memparse(endp+1, NULL);
@@ -342,7 +349,7 @@ static void store_permanent_mappings(void)
 {
 	int i;
 
-	for_each_online_node(i) {
+	for (i = 0; i < NR_PA_HIGHBIT_VALUES; ++i) {
 		HV_PhysAddr pa = ((HV_PhysAddr)node_start_pfn[i]) << PAGE_SHIFT;
 #ifdef CONFIG_HIGHMEM
 		HV_PhysAddr high_mapped_pa = node_lowmem_end_pfn[i];
@@ -352,6 +359,8 @@ static void store_permanent_mappings(void)
 
 		unsigned long pages = high_mapped_pa - node_start_pfn[i];
 		HV_VirtAddr addr = (HV_VirtAddr) __va(pa);
+		if (!pages)
+			continue;
 		hv_store_mapping(addr, pages << PAGE_SHIFT, pa);
 	}
 
@@ -447,7 +456,7 @@ static void __init setup_memory(void)
 				continue;
 			}
 		}
-		if (i >= MAX_NUMNODES) {
+		if (i >= NR_PA_HIGHBIT_VALUES) {
 			pr_err("Too many PA nodes (#%d): %#llx...%#llx\n",
 			       i, range.size, range.size + range.start);
 			continue;
@@ -497,9 +506,11 @@ static void __init setup_memory(void)
 		physpages += size;
 		max_pfn = end;
 
+#ifdef CONFIG_NUMA
 		/* Mark node as online */
 		node_set(i, node_online_map);
 		node_set(i, node_possible_map);
+#endif
 	}
 
 #ifndef __tilegx__
@@ -550,8 +561,8 @@ static void __init setup_memory(void)
 		  pages_to_mb(highmem_pages > 0 ? highmem_pages : 0));
 	pr_notice("%ldMB LOWMEM available\n", pages_to_mb(lowmem_pages));
 #else
-	/* Set max_low_pfn based on what node 0 can directly address. */
-	max_low_pfn = node_end_pfn[0];
+	/* Everything is direct-mapped on tilegx, so lowmem covers it all. */
+	max_low_pfn = max_pfn;
 
 #ifndef __tilegx__
 	if (node_end_pfn[0] > MAXMEM_PFN) {
@@ -571,7 +582,7 @@ static void __init setup_memory(void)
 	high_memory = __va(node_end_pfn[0]);
 #else
 	lowmem_pages = 0;
-	for (i = 0; i < MAX_NUMNODES; ++i) {
+	for (i = 0; i < NR_PA_HIGHBIT_VALUES; ++i) {
 		int pages = node_end_pfn[i] - node_start_pfn[i];
 		lowmem_pages += pages;
 		if (pages)
@@ -633,7 +644,7 @@ static void __init setup_bootmem_allocator(void)
 	 */
 	memblock_set_bottom_up(true);
 
-	for (i = 0; i < MAX_NUMNODES; ++i)
+	for (i = 0; i < NR_PA_HIGHBIT_VALUES; ++i)
 		setup_bootmem_allocator_node(i);
 
 	/* Reserve any memory excluded by "memmap" arguments. */
@@ -1489,10 +1500,12 @@ static int __init request_standard_resources(void)
 	insert_non_bus_resource();
 #endif
 
-	for_each_online_node(i) {
+	for (i = 0; i < NR_PA_HIGHBIT_VALUES; ++i) {
 		u64 start_pfn = node_start_pfn[i];
 		u64 end_pfn = node_end_pfn[i];
 
+		if (start_pfn == end_pfn)
+			continue;
 #if defined(CONFIG_PCI) && !defined(__tilegx__)
 		if (start_pfn <= pci_reserve_start_pfn &&
 		    end_pfn > pci_reserve_start_pfn) {

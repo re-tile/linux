@@ -37,6 +37,12 @@ config TILE
 config MMU
 	def_bool y
 
+# The Gx memory controllers hand out 2^38-strided discontiguous PA
+# ranges, so a flat mem_map can only reach controller 0; sparse
+# sections cover all of them without needing NUMA.
+config ARCH_SPARSEMEM_ENABLE
+	def_bool y
+
 config GENERIC_CSUM
 	def_bool y
 

@@ -55,8 +55,9 @@
 #define clear_pgd(pmdptr) (*(pmdptr) = hv_pte(0))
 
 /* Per-controller memory ranges discovered in setup.c. */
-extern unsigned long node_start_pfn[MAX_NUMNODES];
-extern unsigned long node_end_pfn[MAX_NUMNODES];
+extern unsigned long node_start_pfn[NR_PA_HIGHBIT_VALUES];
+extern unsigned long node_end_pfn[NR_PA_HIGHBIT_VALUES];
+extern int highbits_to_node[NR_PA_HIGHBIT_VALUES];
 
 #ifndef __tilegx__
 unsigned long VMALLOC_RESERVE = CONFIG_VMALLOC_RESERVE;
@@ -106,8 +107,8 @@ static pte_t * __init alloc_pte(void)
  * controller; other page tables are just indexed directly, i.e. the
  * L2 page tables are contiguous in memory for each controller.
  */
-static pte_t *l2_ptes[MAX_NUMNODES];
-static int num_l2_ptes[MAX_NUMNODES];
+static pte_t *l2_ptes[NR_PA_HIGHBIT_VALUES];
+static int num_l2_ptes[NR_PA_HIGHBIT_VALUES];
 
 static void init_prealloc_ptes(int node, int pages)
 {
@@ -121,9 +122,13 @@ static void init_prealloc_ptes(int node, int pages)
 
 pte_t *get_prealloc_pte(unsigned long pfn)
 {
-	int node = pfn_to_nid(pfn);
+	/*
+	 * Index by controller, not Linux node: without NUMA every pfn maps
+	 * to node 0 but the L2 tables are still preallocated per mshim.
+	 */
+	int node = highbits_to_node[__pfn_to_highbits(pfn)];
 	pfn &= ~(-1UL << (NR_PA_HIGHBIT_SHIFT - PAGE_SHIFT));
-	BUG_ON(node >= MAX_NUMNODES);
+	BUG_ON(node < 0 || node >= NR_PA_HIGHBIT_VALUES);
 	BUG_ON(pfn >= num_l2_ptes[node]);
 	return &l2_ptes[node][pfn];
 }
@@ -478,7 +483,7 @@ static void __init kernel_physical_mapping_init(pgd_t *pgd_base)
 		kdata_mask = kstripe_mask;
 
 	/* Allocate and fill in L2 page tables */
-	for (i = 0; i < MAX_NUMNODES; ++i) {
+	for (i = 0; i < NR_PA_HIGHBIT_VALUES; ++i) {
 #ifdef CONFIG_HIGHMEM
 		unsigned long end_pfn = node_lowmem_end_pfn[i];
 #else
@@ -852,13 +857,12 @@ void __init mem_init(void)
 	printk(KERN_DEBUG "  VMALLOC %#lx - %#lx\n",
 	       _VMALLOC_START, _VMALLOC_END - 1);
 #ifdef __tilegx__
-	for (i = MAX_NUMNODES-1; i >= 0; --i) {
-		struct pglist_data *node = NODE_DATA(i);
-		if (node->node_present_pages) {
+	for (i = NR_PA_HIGHBIT_VALUES-1; i >= 0; --i) {
+		if (node_end_pfn[i] > node_start_pfn[i]) {
 			unsigned long start = (unsigned long)
-				pfn_to_kaddr(node->node_start_pfn);
-			unsigned long end = start +
-				(node->node_present_pages << PAGE_SHIFT);
+				pfn_to_kaddr(node_start_pfn[i]);
+			unsigned long end = (unsigned long)
+				pfn_to_kaddr(node_end_pfn[i]);
 			printk(KERN_DEBUG "  MEM%d    %#lx - %#lx\n",
 			       i, start, end - 1);
 		}
