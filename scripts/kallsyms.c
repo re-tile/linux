@@ -57,6 +57,7 @@ static struct sym_entry **table;
 static unsigned int table_size, table_cnt;
 static int all_symbols;
 static int pc_relative;
+static int absolute;
 
 static int token_profit[0x10000];
 
@@ -434,23 +435,39 @@ static void write_src(void)
 		printf("\t.short\t%d\n", best_idx[i]);
 	printf("\n");
 
-	output_label("kallsyms_offsets");
+	if (absolute) {
+		/*
+		 * No 32-bit encoding reaches both text and data on
+		 * architectures with a multi-TB split (tile), so emit the
+		 * plain 64-bit addresses; the multi-pass link has already
+		 * converged them, so no relocations are needed.
+		 */
+		/* .quad entries need more than output_label's .balign 4 */
+		printf("\t.balign 8\n");
+		output_label("kallsyms_addresses");
+		for (i = 0; i < table_cnt; i++)
+			printf("\t.quad\t%#llx\t/* %s */\n",
+			       table[i]->addr, table[i]->sym);
+	} else {
+		output_label("kallsyms_offsets");
 
-	for (i = 0; i < table_cnt; i++) {
-		if (pc_relative) {
-			long long offset = table[i]->addr - _text;
+		for (i = 0; i < table_cnt; i++) {
+			if (pc_relative) {
+				long long offset = table[i]->addr - _text;
 
-			if (offset < INT_MIN || offset > INT_MAX) {
-				fprintf(stderr, "kallsyms failure: "
-					"relative symbol value %#llx out of range\n",
-					table[i]->addr);
-				exit(EXIT_FAILURE);
+				if (offset < INT_MIN || offset > INT_MAX) {
+					fprintf(stderr, "kallsyms failure: "
+						"relative symbol value %#llx out of range\n",
+						table[i]->addr);
+					exit(EXIT_FAILURE);
+				}
+				printf("\t.long\t_text - . + (%d)\t/* %s */\n",
+				       (int)offset, table[i]->sym);
+			} else {
+				printf("\t.long\t%#x\t/* %s */\n",
+				       (unsigned int)table[i]->addr,
+				       table[i]->sym);
 			}
-			printf("\t.long\t_text - . + (%d)\t/* %s */\n",
-			       (int)offset, table[i]->sym);
-		} else {
-			printf("\t.long\t%#x\t/* %s */\n",
-			       (unsigned int)table[i]->addr, table[i]->sym);
 		}
 	}
 	printf("\n");
@@ -700,6 +717,7 @@ int main(int argc, char **argv)
 		static const struct option long_options[] = {
 			{"all-symbols",     no_argument, &all_symbols,     1},
 			{"pc-relative",     no_argument, &pc_relative,     1},
+			{"absolute",        no_argument, &absolute,        1},
 			{},
 		};
 
