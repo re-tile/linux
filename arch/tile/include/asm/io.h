@@ -34,11 +34,6 @@
 #define xlate_dev_kmem_ptr(p)	p
 
 /*
- * Change "struct page" to physical address.
- */
-#define page_to_phys(page)    ((dma_addr_t)page_to_pfn(page) << PAGE_SHIFT)
-
-/*
  * Some places try to pass in an loff_t for PHYSADDR (?!), so we cast it to
  * long before casting it to a pointer to avoid compiler warnings.
  */

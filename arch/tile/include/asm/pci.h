@@ -223,7 +223,4 @@ static inline int pcibios_assign_all_busses(void)
 /* Minimum PCI I/O address, starting at the page boundary. */
 #define PCIBIOS_MIN_IO		PAGE_SIZE
 
-/* Use any cpu for PCI. */
-#define cpumask_of_pcibus(bus) cpu_online_mask
-
 #endif /* _ASM_TILE_PCI_H */
