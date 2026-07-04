@@ -38,8 +38,6 @@ typedef struct {
 DECLARE_PER_CPU(irq_cpustat_t, irq_stat);
 
 #define __ARCH_IRQ_STAT
-#define __IRQ_STAT(cpu, member) (per_cpu(irq_stat, cpu).member)
-
-#include <linux/irq_cpustat.h>	/* Standard mappings for irq_cpustat_t above */
+#define local_softirq_pending_ref	irq_stat.__softirq_pending
 
 #endif /* _ASM_TILE_HARDIRQ_H */

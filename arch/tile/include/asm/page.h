@@ -309,13 +309,6 @@ static inline void *phys_to_virt(phys_addr_t paddr)
 
 extern int devmem_is_allowed(unsigned long pagenr);
 
-#ifdef CONFIG_FLATMEM
-static inline int pfn_valid(unsigned long pfn)
-{
-	return pfn < max_mapnr;
-}
-#endif
-
 /* Provide as macros since these require some other headers included. */
 #define page_to_pa(page) ((phys_addr_t)(page_to_pfn(page)) << PAGE_SHIFT)
 #define virt_to_page(kaddr) pfn_to_page(kaddr_to_pfn((void *)(kaddr)))

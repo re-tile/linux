@@ -28,56 +28,7 @@ extern void __xchg_called_with_bad_pointer(void)
 extern void __cmpxchg_called_with_bad_pointer(void)
 	__compiletime_error("Bad argument size for cmpxchg");
 
-#ifndef __tilegx__
-
-/* Note the _atomic_xxx() routines include a final mb(). */
-int _atomic_xchg(int *ptr, int n);
-int _atomic_xchg_add(int *v, int i);
-int _atomic_xchg_add_unless(int *v, int a, int u);
-int _atomic_cmpxchg(int *ptr, int o, int n);
-long long _atomic64_xchg(long long *v, long long n);
-long long _atomic64_xchg_add(long long *v, long long i);
-long long _atomic64_xchg_add_unless(long long *v, long long a, long long u);
-long long _atomic64_cmpxchg(long long *v, long long o, long long n);
-
-#define xchg(ptr, n)							\
-	({								\
-		if (sizeof(*(ptr)) != 4)				\
-			__xchg_called_with_bad_pointer();		\
-		smp_mb();						\
-		(typeof(*(ptr)))_atomic_xchg((int *)(ptr), (int)(n));	\
-	})
-
-#define cmpxchg(ptr, o, n)						\
-	({								\
-		if (sizeof(*(ptr)) != 4)				\
-			__cmpxchg_called_with_bad_pointer();		\
-		smp_mb();						\
-		(typeof(*(ptr)))_atomic_cmpxchg((int *)ptr, (int)o,	\
-						(int)n);		\
-	})
-
-#define xchg64(ptr, n)							\
-	({								\
-		if (sizeof(*(ptr)) != 8)				\
-			__xchg_called_with_bad_pointer();		\
-		smp_mb();						\
-		(typeof(*(ptr)))_atomic64_xchg((long long *)(ptr),	\
-						(long long)(n));	\
-	})
-
-#define cmpxchg64(ptr, o, n)						\
-	({								\
-		if (sizeof(*(ptr)) != 8)				\
-			__cmpxchg_called_with_bad_pointer();		\
-		smp_mb();						\
-		(typeof(*(ptr)))_atomic64_cmpxchg((long long *)ptr,	\
-					(long long)o, (long long)n);	\
-	})
-
-#else
-
-#define xchg(ptr, n)							\
+#define arch_xchg(ptr, n)						\
 	({								\
 		typeof(*(ptr)) __x;					\
 		smp_mb();						\
@@ -99,7 +50,7 @@ long long _atomic64_cmpxchg(long long *v, long long o, long long n);
 		__x;							\
 	})
 
-#define cmpxchg(ptr, o, n)						\
+#define arch_cmpxchg(ptr, o, n)						\
 	({								\
 		typeof(*(ptr)) __x;					\
 		__insn_mtspr(SPR_CMPEXCH_VALUE, (unsigned long)(o));	\
@@ -122,10 +73,14 @@ long long _atomic64_cmpxchg(long long *v, long long o, long long n);
 		__x;							\
 	})
 
-#define xchg64 xchg
-#define cmpxchg64 cmpxchg
+#define arch_cmpxchg64		arch_cmpxchg
 
-#endif
+/*
+ * "Local" versions have no cheaper CPU-local form on tilegx; the
+ * full-barrier versions are simply stronger than required.
+ */
+#define arch_cmpxchg_local	arch_cmpxchg
+#define arch_cmpxchg64_local	arch_cmpxchg
 
 #endif /* __ASSEMBLY__ */
 
