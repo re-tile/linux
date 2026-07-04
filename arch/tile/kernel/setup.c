@@ -842,14 +842,23 @@ static void __init setup_numa_mapping(void)
 	}
 }
 
+#else /* !CONFIG_NUMA */
+
+#define setup_numa_mapping() do { } while (0)
+
+#endif /* CONFIG_NUMA */
+
 static struct cpu cpu_devices[NR_CPUS];
 
+/*
+ * This must run regardless of NUMA: without the registered cpu
+ * devices there is no /sys/devices/system/cpu/cpuN and every cpuhp
+ * callback that hangs sysfs groups off them warns on a NULL kobject.
+ * (Node devices register themselves via node_dev_init() now.)
+ */
 static int __init topology_init(void)
 {
 	int i;
-
-	for_each_online_node(i)
-		register_one_node(i);
 
 	for (i = 0; i < smp_height * smp_width; ++i)
 		register_cpu(&cpu_devices[i], i);
@@ -858,12 +867,6 @@ static int __init topology_init(void)
 }
 
 subsys_initcall(topology_init);
-
-#else /* !CONFIG_NUMA */
-
-#define setup_numa_mapping() do { } while (0)
-
-#endif /* CONFIG_NUMA */
 
 /*
  * Initialize hugepage support on this cpu.  We do this on all cores
