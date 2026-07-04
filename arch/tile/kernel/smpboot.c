@@ -55,19 +55,10 @@ static void start_secondary(void);
  */
 void __init smp_prepare_cpus(unsigned int max_cpus)
 {
-	long rc;
 	int cpu, cpu_count;
 	int boot_cpu = smp_processor_id();
 
 	current_thread_info()->cpu = boot_cpu;
-
-	/*
-	 * Pin this task to the boot CPU while we bring up the others,
-	 * just to make sure we don't uselessly migrate as they come up.
-	 */
-	rc = sched_setaffinity(current->pid, cpumask_of(boot_cpu));
-	if (rc != 0)
-		pr_err("Couldn't set init affinity to boot cpu (%ld)\n", rc);
 
 	/* Print information about disabled and dataplane cpus. */
 	print_disabled_cpus();
@@ -120,17 +111,6 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 		hv_start_all_tiles();
 	}
 }
-
-static __initdata struct cpumask init_affinity;
-
-static __init int reset_init_affinity(void)
-{
-	long rc = sched_setaffinity(current->pid, &init_affinity);
-	if (rc != 0)
-		pr_warn("couldn't reset init affinity (%ld)\n", rc);
-	return 0;
-}
-late_initcall(reset_init_affinity);
 
 static struct cpumask cpu_started;
 
@@ -239,30 +219,14 @@ static void panic_start_cpu(void)
 	panic("Received a MSG_START_CPU IPI after boot finished.");
 }
 
+/*
+ * The old pin-init-to-the-boot-cpu-then-move-it dance is done by the
+ * core now: rest_init() pins init with PF_NO_SETAFFINITY and
+ * sched_init_smp() releases it onto the housekeeping cpus, so any
+ * sched_setaffinity() from here just fails against that flag.
+ */
 void __init smp_cpus_done(unsigned int max_cpus)
 {
-	int cpu, next, rc;
-
 	/* Reset the response to a (now illegal) MSG_START_CPU IPI. */
 	start_cpu_function_addr = (unsigned long) &panic_start_cpu;
-
-	cpumask_copy(&init_affinity, cpu_online_mask);
-
-	/*
-	 * Pin ourselves to a single cpu in the initial affinity set
-	 * so that kernel mappings for the rootfs are not in the dataplane,
-	 * if set, and to avoid unnecessary migrating during bringup.
-	 * Use the last cpu just in case the whole chip has been
-	 * isolated from the scheduler, to keep init away from likely
-	 * more useful user code.  This also ensures that work scheduled
-	 * via schedule_delayed_work() in the init routines will land
-	 * on this cpu.
-	 */
-	for (cpu = cpumask_first(&init_affinity);
-	     (next = cpumask_next(cpu, &init_affinity)) < nr_cpu_ids;
-	     cpu = next)
-		;
-	rc = sched_setaffinity(current->pid, cpumask_of(cpu));
-	if (rc != 0)
-		pr_err("Couldn't set init affinity to cpu %d (%d)\n", cpu, rc);
 }
