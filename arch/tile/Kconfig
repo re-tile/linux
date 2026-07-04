@@ -28,6 +28,8 @@ config TILE
 	select HAVE_SYSCALL_TRACEPOINTS
 	select KALLSYMS_ABSOLUTE if KALLSYMS
 	select MODULES_USE_ELF_RELA
+	select NEED_SG_DMA_LENGTH
+	select SWIOTLB
 	select SYSCTL_EXCEPTION_TRACE
 	select SYS_HYPERVISOR
 	select USER_STACKTRACE_SUPPORT
@@ -71,18 +73,6 @@ config GENERIC_TIME_VSYSCALL
 
 # Enable PMC if PERF_EVENTS, OPROFILE, or WATCHPOINTS are enabled.
 config USE_PMC
-	bool
-
-config ARCH_PHYS_ADDR_T_64BIT
-	def_bool y
-
-config ARCH_DMA_ADDR_T_64BIT
-	def_bool y
-
-config NEED_DMA_MAP_STATE
-	def_bool y
-
-config ARCH_HAS_DMA_SET_COHERENT_MASK
 	bool
 
 config LOCKDEP_SUPPORT
@@ -155,19 +145,6 @@ config SYSVIPC_COMPAT
 
 config ZONE_DMA32
 	def_bool y
-
-config IOMMU_HELPER
-	bool
-
-config NEED_SG_DMA_LENGTH
-	bool
-
-config SWIOTLB
-	bool
-	default TILEGX
-	select IOMMU_HELPER
-	select NEED_SG_DMA_LENGTH
-	select ARCH_HAS_DMA_SET_COHERENT_MASK
 
 config CMDLINE_BOOL
 	bool "Built-in kernel command line"
