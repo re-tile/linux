@@ -19,25 +19,19 @@
 #include <hv/hypervisor.h>
 #include <arch/chip.h>
 
-/* PAGE_SHIFT and HPAGE_SHIFT determine the page sizes. */
-#if defined(CONFIG_PAGE_SIZE_4KB)  /* tilepro only */
-#define PAGE_SHIFT	12
-#define CTX_PAGE_FLAG	HV_CTX_PG_SM_4K
-#elif defined(CONFIG_PAGE_SIZE_16KB)
-#define PAGE_SHIFT	14
+/* PAGE_SHIFT/PAGE_SIZE/PAGE_MASK now come from the generic page-size choice. */
+#include <vdso/page.h>
+
+#if defined(CONFIG_PAGE_SIZE_16KB)
 #define CTX_PAGE_FLAG	HV_CTX_PG_SM_16K
 #elif defined(CONFIG_PAGE_SIZE_64KB)
-#define PAGE_SHIFT	16
 #define CTX_PAGE_FLAG	HV_CTX_PG_SM_64K
 #else
 #error Page size not specified in Kconfig
 #endif
 #define HPAGE_SHIFT	HV_LOG2_DEFAULT_PAGE_SIZE_LARGE
 
-#define PAGE_SIZE	(_AC(1, UL) << PAGE_SHIFT)
 #define HPAGE_SIZE	(_AC(1, UL) << HPAGE_SHIFT)
-
-#define PAGE_MASK	(~(PAGE_SIZE - 1))
 #define HPAGE_MASK	(~(HPAGE_SIZE - 1))
 
 /*

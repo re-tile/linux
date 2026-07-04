@@ -76,6 +76,8 @@ extern tile_bundle_bits breakpoint_insn;
 
 void arch_remove_kprobe(struct kprobe *);
 
+int kprobe_fault_handler(struct pt_regs *regs, unsigned int trapnr);
+
 extern int kprobe_exceptions_notify(struct notifier_block *self,
 			     unsigned long val, void *data);
 

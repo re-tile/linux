@@ -21,6 +21,15 @@
 
 /* Standard Linux flags */
 
+/*
+ * mman-common.h now defines generic values for these four flags, but the
+ * tile ABI predates that and glibc/MDE userland bakes in the values below.
+ */
+#undef MAP_POPULATE
+#undef MAP_NONBLOCK
+#undef MAP_STACK
+#undef MAP_HUGETLB
+
 #define MAP_POPULATE	0x0040		/* populate (prefault) pagetables */
 #define MAP_NONBLOCK	0x0080		/* do not block on IO */
 #define MAP_GROWSDOWN	0x0100		/* stack-like segment */

@@ -15,6 +15,9 @@
 #ifndef _ASM_TILE_TIMEX_H
 #define _ASM_TILE_TIMEX_H
 
+#include <arch/chip.h>
+#include <arch/spr_def.h>
+
 /*
  * This rate should be a multiple of the possible HZ values (100, 250, 1000)
  * and a fraction of the possible hardware timer frequencies.  Our timer
