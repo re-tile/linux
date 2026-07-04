@@ -202,15 +202,9 @@ static inline void start_thread(struct pt_regs *regs,
 	single_step_execve();
 }
 
-/* Free all resources held by a thread. */
-static inline void release_thread(struct task_struct *dead_task)
-{
-	/* Nothing for now */
-}
-
 extern void prepare_exit_to_usermode(struct pt_regs *regs, u32 flags);
 
-unsigned long get_wchan(struct task_struct *p);
+unsigned long __get_wchan(struct task_struct *p);
 
 /* Return initial ksp value for given task. */
 #define task_ksp0(task) \

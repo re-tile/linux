@@ -72,7 +72,7 @@ void signal_fault(const char *type, struct pt_regs *regs,
 		  void __user *frame, int sig)
 {
 	trace_unhandled_signal(type, regs, (unsigned long)frame, SIGSEGV);
-	force_sigsegv(sig, current);
+	force_sigsegv(sig);
 }
 
 /* The assembly shim for this function arranges to ignore the return value. */
@@ -83,7 +83,7 @@ SYSCALL_DEFINE0(rt_sigreturn)
 		(struct rt_sigframe __user *)(regs->sp);
 	sigset_t set;
 
-	if (!access_ok(VERIFY_READ, frame, sizeof(*frame)))
+	if (!access_ok(frame, sizeof(*frame)))
 		goto badframe;
 	if (__copy_from_user(&set, &frame->uc.uc_sigmask, sizeof(set)))
 		goto badframe;
@@ -156,7 +156,7 @@ static int setup_rt_frame(struct ksignal *ksig, sigset_t *set,
 
 	frame = get_sigframe(&ksig->ka, regs, sizeof(*frame));
 
-	if (!access_ok(VERIFY_WRITE, frame, sizeof(*frame)))
+	if (!access_ok(frame, sizeof(*frame)))
 		goto err;
 
 	/* Always write at least the signal number for the stack backtracer. */
@@ -228,7 +228,7 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 				regs->regs[0] = -EINTR;
 				break;
 			}
-			/* fallthrough */
+			fallthrough;
 		case -ERESTARTNOINTR:
 			/* Reload caller-saves to restore r0..r5 and r10. */
 			regs->flags |= PT_FLAGS_CALLER_SAVES;
@@ -332,7 +332,7 @@ static void dump_mem(void __user *address)
 	int i, j, k;
 	int found_readable_mem = 0;
 
-	if (!access_ok(VERIFY_READ, address, 1)) {
+	if (!access_ok(address, 1)) {
 		pr_err("Not dumping at address 0x%lx (kernel address)\n",
 		       (unsigned long)address);
 		return;

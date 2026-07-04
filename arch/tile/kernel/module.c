@@ -16,12 +16,11 @@
 
 #include <linux/moduleloader.h>
 #include <linux/elf.h>
-#include <linux/vmalloc.h>
+#include <linux/execmem.h>
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <asm/pgtable.h>
-#include <asm/homecache.h>
 #include <arch/opcode.h>
 
 #ifdef MODULE_DEBUG
@@ -30,62 +29,31 @@
 #define DEBUGP(fmt...)
 #endif
 
+#ifdef CONFIG_EXECMEM
+static struct execmem_info execmem_info __ro_after_init;
+
 /*
- * Allocate some address space in the range MEM_MODULE_START to
- * MEM_MODULE_END and populate it with memory.
+ * Allocate module memory in the range MEM_MODULE_START to
+ * MEM_MODULE_END so that PC-relative branches and HW2_LAST
+ * addressing can reach the kernel.
  */
-void *module_alloc(unsigned long size)
+struct execmem_info __init *execmem_arch_setup(void)
 {
-	struct page **pages;
-	pgprot_t prot_rwx = __pgprot(_PAGE_KERNEL | _PAGE_KERNEL_EXEC);
-	struct vm_struct *area;
-	int i = 0;
-	int npages;
+	execmem_info = (struct execmem_info){
+		.ranges = {
+			[EXECMEM_DEFAULT] = {
+				.start	= MEM_MODULE_START,
+				.end	= MEM_MODULE_END,
+				.pgprot	= __pgprot(_PAGE_KERNEL |
+						   _PAGE_KERNEL_EXEC),
+				.alignment = 1,
+			},
+		},
+	};
 
-	npages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	pages = kmalloc_array(npages, sizeof(*pages), GFP_KERNEL);
-	if (pages == NULL)
-		return NULL;
-	for (; i < npages; ++i) {
-		pages[i] = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
-		if (!pages[i])
-			goto free_pages;
-	}
-
-	area = __get_vm_area(size, VM_ALLOC, MEM_MODULE_START, MEM_MODULE_END);
-	if (!area)
-		goto free_pages;
-	area->nr_pages = npages;
-	area->pages = pages;
-
-	if (map_vm_area(area, prot_rwx, pages)) {
-		vunmap(area->addr);
-		goto free_pages;
-	}
-
-	return area->addr;
- free_pages:
-	while (--i >= 0)
-		__free_page(pages[i]);
-	kfree(pages);
-	return NULL;
+	return &execmem_info;
 }
-
-
-/* Free memory returned from module_alloc */
-void module_memfree(void *module_region)
-{
-	vfree(module_region);
-
-	/* Globally flush the L1 icache. */
-	flush_remote(0, HV_FLUSH_EVICT_L1I, cpu_online_mask,
-		     0, 0, 0, NULL, NULL, 0);
-
-	/*
-	 * FIXME: Add module_arch_freeing_init to trim exception
-	 * table entries.
-	 */
-}
+#endif
 
 #ifdef __tilegx__
 /*
@@ -164,13 +132,13 @@ int apply_relocate_add(Elf_Shdr *sechdrs,
 			break;
 		case R_TILE_IMM16_X0_HA:
 			value = (value + 0x8000) >> 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILE_IMM16_X0_LO:
 			MUNGE(create_Imm16_X0);
 			break;
 		case R_TILE_IMM16_X1_HA:
 			value = (value + 0x8000) >> 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILE_IMM16_X1_LO:
 			MUNGE(create_Imm16_X1);
 			break;
@@ -187,10 +155,10 @@ int apply_relocate_add(Elf_Shdr *sechdrs,
 			if (!validate_hw2_last(value, me))
 				return -ENOEXEC;
 			value >>= 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILEGX_IMM16_X0_HW1:
 			value >>= 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILEGX_IMM16_X0_HW0:
 			MUNGE(create_Imm16_X0);
 			break;
@@ -198,10 +166,10 @@ int apply_relocate_add(Elf_Shdr *sechdrs,
 			if (!validate_hw2_last(value, me))
 				return -ENOEXEC;
 			value >>= 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILEGX_IMM16_X1_HW1:
 			value >>= 16;
-			/*FALLTHROUGH*/
+			fallthrough;
 		case R_TILEGX_IMM16_X1_HW0:
 			MUNGE(create_Imm16_X1);
 			break;

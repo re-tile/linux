@@ -47,6 +47,15 @@
 #define SIZEOF_PTE	_HV_L2_SIZE(HPAGE_SHIFT, PAGE_SHIFT)
 
 /*
+ * Table sizes for the generic pcpu_populate_pte().  The pud/p4d levels
+ * are folded, so those two are never actually allocated.
+ */
+#define PTE_TABLE_SIZE	SIZEOF_PTE
+#define PMD_TABLE_SIZE	SIZEOF_PMD
+#define PUD_TABLE_SIZE	SIZEOF_PGD
+#define P4D_TABLE_SIZE	SIZEOF_PGD
+
+/*
  * Align the vmalloc area to an L2 page table.  Omit guard pages at
  * the beginning and end for simplicity (particularly in the per-cpu
  * memory allocation code).  The vmalloc code puts in an internal

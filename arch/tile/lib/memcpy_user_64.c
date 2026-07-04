@@ -72,14 +72,3 @@
 #define LD4(p) _LD((p), ld4u)
 #define LD8(p) _LD((p), ld)
 #include "memcpy_64.c"
-
-#define USERCOPY_FUNC raw_copy_in_user
-#define ST1(p, v) _ST((p), st1, (v))
-#define ST2(p, v) _ST((p), st2, (v))
-#define ST4(p, v) _ST((p), st4, (v))
-#define ST8(p, v) _ST((p), st, (v))
-#define LD1(p) _LD((p), ld1u)
-#define LD2(p) _LD((p), ld2u)
-#define LD4(p) _LD((p), ld4u)
-#define LD8(p) _LD((p), ld)
-#include "memcpy_64.c"

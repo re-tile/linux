@@ -47,14 +47,15 @@ int tile_console_write(const char *buf, int count)
 	}
 }
 
-static int hvc_tile_put_chars(uint32_t vt, const char *buf, int count)
+static ssize_t hvc_tile_put_chars(uint32_t vt, const u8 *buf, size_t count)
 {
-	return tile_console_write(buf, count);
+	return tile_console_write((const char *)buf, count);
 }
 
-static int hvc_tile_get_chars(uint32_t vt, char *buf, int count)
+static ssize_t hvc_tile_get_chars(uint32_t vt, u8 *buf, size_t count)
 {
-	int i, c;
+	size_t i;
+	int c;
 
 	for (i = 0; i < count; ++i) {
 		c = hv_console_read_if_ready();
@@ -124,15 +125,23 @@ static int hvc_tile_probe(struct platform_device *pdev)
 	struct hvc_struct *hp;
 	int tile_hvc_irq;
 
-	/* Create our IRQ and register it. */
-	tile_hvc_irq = irq_alloc_hwirq(-1);
-	if (!tile_hvc_irq)
+	/*
+	 * Create our IRQ and register it.  The desc number doubles as the
+	 * hv IPI event bit, and the sparse allocator's bitmap extends past
+	 * NR_IRQS, so reject anything without a hw event bit behind it.
+	 */
+	tile_hvc_irq = irq_alloc_desc(NUMA_NO_NODE);
+	if (tile_hvc_irq < 0)
 		return -ENXIO;
+	if (tile_hvc_irq >= NR_IRQS) {
+		irq_free_desc(tile_hvc_irq);
+		return -ENXIO;
+	}
 
 	tile_irq_activate(tile_hvc_irq, TILE_IRQ_PERCPU);
 	hp = hvc_alloc(0, tile_hvc_irq, &hvc_tile_get_put_ops, 128);
 	if (IS_ERR(hp)) {
-		irq_free_hwirq(tile_hvc_irq);
+		irq_free_desc(tile_hvc_irq);
 		return PTR_ERR(hp);
 	}
 	dev_set_drvdata(&pdev->dev, hp);
@@ -140,16 +149,12 @@ static int hvc_tile_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int hvc_tile_remove(struct platform_device *pdev)
+static void hvc_tile_remove(struct platform_device *pdev)
 {
-	int rc;
 	struct hvc_struct *hp = dev_get_drvdata(&pdev->dev);
 
-	rc = hvc_remove(hp);
-	if (rc == 0)
-		irq_free_hwirq(hp->data);
-
-	return rc;
+	hvc_remove(hp);
+	irq_free_desc(hp->data);
 }
 
 static void hvc_tile_shutdown(struct platform_device *pdev)

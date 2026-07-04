@@ -30,7 +30,7 @@
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
 #include <linux/poison.h>
-#include <linux/bootmem.h>
+#include <linux/memblock.h>
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/efi.h>
@@ -54,15 +54,44 @@
 
 #define clear_pgd(pmdptr) (*(pmdptr) = hv_pte(0))
 
+/* Per-controller memory ranges discovered in setup.c. */
+extern unsigned long node_start_pfn[MAX_NUMNODES];
+extern unsigned long node_end_pfn[MAX_NUMNODES];
+
 #ifndef __tilegx__
 unsigned long VMALLOC_RESERVE = CONFIG_VMALLOC_RESERVE;
 EXPORT_SYMBOL(VMALLOC_RESERVE);
 #endif
 
+/*
+ * We could tighten these up, but for now writable or executable
+ * implies readable.
+ */
+static const pgprot_t protection_map[16] = {
+	[VM_NONE]					= PAGE_NONE,
+	[VM_READ]					= PAGE_READONLY,
+	[VM_WRITE]					= PAGE_COPY,
+	[VM_WRITE | VM_READ]				= PAGE_COPY,
+	[VM_EXEC]					= PAGE_READONLY_EXEC,
+	[VM_EXEC | VM_READ]				= PAGE_READONLY_EXEC,
+	[VM_EXEC | VM_WRITE]				= PAGE_COPY_EXEC,
+	[VM_EXEC | VM_WRITE | VM_READ]			= PAGE_COPY_EXEC,
+	[VM_SHARED]					= PAGE_NONE,
+	[VM_SHARED | VM_READ]				= PAGE_READONLY,
+	[VM_SHARED | VM_WRITE]				= PAGE_SHARED,
+	[VM_SHARED | VM_WRITE | VM_READ]		= PAGE_SHARED,
+	[VM_SHARED | VM_EXEC]				= PAGE_READONLY_EXEC,
+	[VM_SHARED | VM_EXEC | VM_READ]			= PAGE_READONLY_EXEC,
+	[VM_SHARED | VM_EXEC | VM_WRITE]		= PAGE_SHARED_EXEC,
+	[VM_SHARED | VM_EXEC | VM_WRITE | VM_READ]	= PAGE_SHARED_EXEC
+};
+DECLARE_VM_GET_PAGE_PROT
+
 /* Create an L2 page table */
 static pte_t * __init alloc_pte(void)
 {
-	return __alloc_bootmem(L2_KERNEL_PGTABLE_SIZE, HV_PAGE_TABLE_ALIGN, 0);
+	return memblock_alloc_or_panic(L2_KERNEL_PGTABLE_SIZE,
+				       HV_PAGE_TABLE_ALIGN);
 }
 
 /*
@@ -85,8 +114,8 @@ static void init_prealloc_ptes(int node, int pages)
 	BUG_ON(pages & (PTRS_PER_PTE - 1));
 	if (pages) {
 		num_l2_ptes[node] = pages;
-		l2_ptes[node] = __alloc_bootmem(pages * sizeof(pte_t),
-						HV_PAGE_TABLE_ALIGN, 0);
+		l2_ptes[node] = memblock_alloc_or_panic(pages * sizeof(pte_t),
+							HV_PAGE_TABLE_ALIGN);
 	}
 }
 
@@ -131,7 +160,8 @@ static void __init assign_pte(pmd_t *pmd, pte_t *page_table)
 
 static inline pmd_t *alloc_pmd(void)
 {
-	return __alloc_bootmem(L1_KERNEL_PGTABLE_SIZE, HV_PAGE_TABLE_ALIGN, 0);
+	return memblock_alloc_or_panic(L1_KERNEL_PGTABLE_SIZE,
+				       HV_PAGE_TABLE_ALIGN);
 }
 
 static inline void assign_pmd(pud_t *pud, pmd_t *pmd)
@@ -151,7 +181,7 @@ void __init shatter_pmd(pmd_t *pmd)
 #ifdef __tilegx__
 static pmd_t *__init get_pmd(pgd_t pgtables[], unsigned long va)
 {
-	pud_t *pud = pud_offset(&pgtables[pgd_index(va)], va);
+	pud_t *pud = pud_offset(p4d_offset(&pgtables[pgd_index(va)], va), va);
 	if (pud_none(*pud))
 		assign_pmd(pud, alloc_pmd());
 	return pmd_offset(pud, va);
@@ -758,9 +788,12 @@ void __init paging_init(void)
 	 * need for e.g. vmalloc_sync_all().
 	 */
 	BUILD_BUG_ON(pgd_index(VMALLOC_START) != pgd_index(VMALLOC_END - 1));
-	pud = pud_offset(pgd_base + pgd_index(VMALLOC_START), VMALLOC_START);
+	pud = pud_offset(p4d_offset(pgd_base + pgd_index(VMALLOC_START),
+				    VMALLOC_START), VMALLOC_START);
 	assign_pmd(pud, alloc_pmd());
 #endif
+
+	pgtable_cache_init();
 }
 
 
@@ -771,13 +804,6 @@ void __init paging_init(void)
  */
 void __init set_page_homes(void)
 {
-}
-
-static void __init set_max_mapnr_init(void)
-{
-#ifdef CONFIG_FLATMEM
-	max_mapnr = max_low_pfn;
-#endif
 }
 
 void __init mem_init(void)
@@ -801,17 +827,10 @@ void __init mem_init(void)
 	}
 #endif
 
-	set_max_mapnr_init();
-
-	/* this will put all bootmem onto the freelists */
-	free_all_bootmem();
-
 #ifndef CONFIG_64BIT
 	/* count all remaining LOWMEM and give all HIGHMEM to page allocator */
 	set_non_bootmem_pages_init();
 #endif
-
-	mem_init_print_info(NULL);
 
 	/*
 	 * In debug mode, dump some interesting memory mappings.
@@ -826,7 +845,7 @@ void __init mem_init(void)
 	       _VMALLOC_START, _VMALLOC_END - 1);
 #ifdef __tilegx__
 	for (i = MAX_NUMNODES-1; i >= 0; --i) {
-		struct pglist_data *node = &node_data[i];
+		struct pglist_data *node = NODE_DATA(i);
 		if (node->node_present_pages) {
 			unsigned long start = (unsigned long)
 				pfn_to_kaddr(node->node_start_pfn);
@@ -907,7 +926,7 @@ static void free_init_pages(char *what, unsigned long begin, unsigned long end)
 		 */
 		int pfn = kaddr_to_pfn((void *)addr);
 		struct page *page = pfn_to_page(pfn);
-		pte_t *ptep = virt_to_kpte(addr);
+		pte_t *ptep = virt_to_pte(NULL, addr);
 		if (!initfree) {
 			/*
 			 * If debugging page accesses then do not free

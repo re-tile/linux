@@ -269,12 +269,3 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 #endif
 	return 0;
 }
-
-#if CHIP_HAS_IPI()
-int arch_setup_hwirq(unsigned int irq, int node)
-{
-	return irq >= NR_IRQS ? -EINVAL : 0;
-}
-
-void arch_teardown_hwirq(unsigned int irq) { }
-#endif

@@ -109,7 +109,7 @@
 static inline int arch_futex_atomic_op_inuser(int op, u32 oparg, int *oval,
 		u32 __user *uaddr)
 {
-	int uninitialized_var(val), ret;
+	int val = 0, ret;
 
 	__futex_prolog();
 
@@ -152,7 +152,7 @@ static inline int futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr,
 
 	__futex_prolog();
 
-	if (!access_ok(VERIFY_WRITE, uaddr, sizeof(u32)))
+	if (!access_ok(uaddr, sizeof(u32)))
 		return -EFAULT;
 
 	__futex_cmpxchg();

@@ -38,6 +38,12 @@ typedef unsigned long pt_reg_t;
 #define profile_pc(regs) instruction_pointer(regs)
 #define user_stack_pointer(regs) ((regs)->sp)
 
+static inline void instruction_pointer_set(struct pt_regs *regs,
+					   unsigned long val)
+{
+	regs->pc = val;
+}
+
 /* Does the process account for user or for system time? */
 #define user_mode(regs) (EX1_PL((regs)->ex1) < KERNEL_PL)
 

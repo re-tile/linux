@@ -130,28 +130,6 @@ extern void set_page_homes(void);
 #define page_to_kpgprot(p) PAGE_KERNEL
 
 /*
- * We could tighten these up, but for now writable or executable
- * implies readable.
- */
-#define __P000	PAGE_NONE
-#define __P001	PAGE_READONLY
-#define __P010	PAGE_COPY      /* this is write-only, which we won't support */
-#define __P011	PAGE_COPY
-#define __P100	PAGE_READONLY_EXEC
-#define __P101	PAGE_READONLY_EXEC
-#define __P110	PAGE_COPY_EXEC
-#define __P111	PAGE_COPY_EXEC
-
-#define __S000	PAGE_NONE
-#define __S001	PAGE_READONLY
-#define __S010	PAGE_SHARED
-#define __S011	PAGE_SHARED
-#define __S100	PAGE_READONLY_EXEC
-#define __S101	PAGE_READONLY_EXEC
-#define __S110	PAGE_SHARED_EXEC
-#define __S111	PAGE_SHARED_EXEC
-
-/*
  * All the normal _PAGE_ALL bits are ignored for PMDs, except PAGE_PRESENT
  * and PAGE_HUGE_PAGE, which must be one and zero, respectively.
  * We set the ignored bits to zero.
@@ -296,6 +274,25 @@ extern void check_mm_caching(struct mm_struct *prev, struct mm_struct *next);
 #define __swp_entry_to_pte(swp)	((pte_t) { (((long long) ((swp).val)) << 32) })
 
 /*
+ * The swap type+offset only use the high 32 bits (above), so the
+ * CLIENT2 software bit is free to record the swap-exclusive state.
+ */
+static inline int pte_swp_exclusive(pte_t pte)
+{
+	return hv_pte_get_client2(pte);
+}
+
+static inline pte_t pte_swp_mkexclusive(pte_t pte)
+{
+	return hv_pte_set_client2(pte);
+}
+
+static inline pte_t pte_swp_clear_exclusive(pte_t pte)
+{
+	return hv_pte_clear_client2(pte);
+}
+
+/*
  * Conversion functions: convert a page and protection to a page entry,
  * and a page entry and page directory to the page they refer to.
  */
@@ -338,11 +335,8 @@ do {						\
  * The kernel page tables contain what we need, and we flush when we
  * change specific page table entries.
  */
-#define update_mmu_cache(vma, address, pte) do { } while (0)
-
-#ifdef CONFIG_FLATMEM
-#define kern_addr_valid(addr)	(1)
-#endif /* CONFIG_FLATMEM */
+#define update_mmu_cache_range(vmf, vma, address, ptep, nr) do { } while (0)
+#define update_mmu_cache(vma, address, ptep) do { } while (0)
 
 extern void vmalloc_sync_all(void);
 
@@ -457,7 +451,7 @@ static inline void pmd_clear(pmd_t *pmdp)
 #define pmd_young(pmd)		pte_young(pmd_pte(pmd))
 #define pmd_mkyoung(pmd)	pte_pmd(pte_mkyoung(pmd_pte(pmd)))
 #define pmd_mkold(pmd)		pte_pmd(pte_mkold(pmd_pte(pmd)))
-#define pmd_mkwrite(pmd)	pte_pmd(pte_mkwrite(pmd_pte(pmd)))
+#define pmd_mkwrite_novma(pmd)	pte_pmd(pte_mkwrite_novma(pmd_pte(pmd)))
 #define pmd_write(pmd)		pte_write(pmd_pte(pmd))
 #define pmd_wrprotect(pmd)	pte_pmd(pte_wrprotect(pmd_pte(pmd)))
 #define pmd_mkdirty(pmd)	pte_pmd(pte_mkdirty(pmd_pte(pmd)))

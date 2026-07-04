@@ -14,6 +14,7 @@
 
 #include <linux/sched.h>
 #include <linux/sched/debug.h>
+#include <linux/sched/task.h>
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
 #include <linux/kdebug.h>
@@ -256,13 +257,10 @@ static int do_bpt(struct pt_regs *regs)
 void __kprobes do_trap(struct pt_regs *regs, int fault_num,
 		       unsigned long reason)
 {
-	siginfo_t info;
 	int signo, code;
 	unsigned long address = 0;
 	tile_bundle_bits instr;
 	int is_kernel = !user_mode(regs);
-
-	clear_siginfo(&info);
 
 	/* Handle breakpoints, etc. */
 	if (is_kernel && fault_num == INT_ILL && do_bpt(regs))
@@ -298,7 +296,7 @@ void __kprobes do_trap(struct pt_regs *regs, int fault_num,
 		pr_alert("Kernel took bad trap %d (%s) at PC %#lx%s\n",
 			 fault_num, name, regs->pc, buf);
 		show_regs(regs);
-		do_exit(SIGKILL);  /* FIXME: implement i386 die() */
+		make_task_dead(SIGKILL);  /* FIXME: implement i386 die() */
 	}
 
 	switch (fault_num) {
@@ -311,7 +309,7 @@ void __kprobes do_trap(struct pt_regs *regs, int fault_num,
 				   sizeof(instr))) {
 			pr_err("Unreadable instruction for INT_ILL: %#lx\n",
 			       regs->pc);
-			do_exit(SIGKILL);
+			make_task_dead(SIGKILL);
 		}
 		if (!special_ill(instr, &signo, &code)) {
 			signo = SIGILL;
@@ -385,14 +383,13 @@ void __kprobes do_trap(struct pt_regs *regs, int fault_num,
 		panic("Unexpected do_trap interrupt number %d", fault_num);
 	}
 
-	info.si_signo = signo;
-	info.si_code = code;
-	info.si_addr = (void __user *)address;
-	if (signo == SIGILL)
-		info.si_trapno = fault_num;
 	if (signo != SIGTRAP)
 		trace_unhandled_signal("trap", regs, address, signo);
-	force_sig_info(signo, &info, current);
+	if (signo == SIGILL)
+		force_sig_fault_trapno(signo, code, (void __user *)address,
+				       fault_num);
+	else
+		force_sig_fault(signo, code, (void __user *)address);
 }
 
 void do_nmi(struct pt_regs *regs, int fault_num, unsigned long reason)

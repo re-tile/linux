@@ -27,11 +27,7 @@
  * access.
  */
 #define xlate_dev_mem_ptr(p)	__va(p)
-
-/*
- * Convert a virtual cached pointer to an uncached pointer.
- */
-#define xlate_dev_kmem_ptr(p)	p
+#define unxlate_dev_mem_ptr(p, v)	do { } while (0)
 
 /*
  * Some places try to pass in an loff_t for PHYSADDR (?!), so we cast it to
@@ -261,6 +257,7 @@ static inline void memset_io(volatile void *dst, int val, size_t len)
 	for (x = 0; x < len; x += 4)
 		writel(val, dst + x);
 }
+#define memset_io memset_io
 
 static inline void memcpy_fromio(void *dst, const volatile void __iomem *src,
 				 size_t len)
@@ -270,6 +267,7 @@ static inline void memcpy_fromio(void *dst, const volatile void __iomem *src,
 	for (x = 0; x < len; x += 4)
 		*(u32 *)(dst + x) = readl(src + x);
 }
+#define memcpy_fromio memcpy_fromio
 
 static inline void memcpy_toio(volatile void __iomem *dst, const void *src,
 				size_t len)
@@ -279,6 +277,7 @@ static inline void memcpy_toio(volatile void __iomem *dst, const void *src,
 	for (x = 0; x < len; x += 4)
 		writel(*(u32 *)(src + x), dst + x);
 }
+#define memcpy_toio memcpy_toio
 
 #endif
 

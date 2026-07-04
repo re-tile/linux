@@ -40,9 +40,6 @@ EXPORT_SYMBOL(__mcount);
 EXPORT_SYMBOL(memcpy);
 EXPORT_SYMBOL(raw_copy_to_user);
 EXPORT_SYMBOL(raw_copy_from_user);
-#ifdef __tilegx__
-EXPORT_SYMBOL(raw_copy_in_user);
-#endif
 
 /* hypervisor glue */
 #include <hv/hypervisor.h>

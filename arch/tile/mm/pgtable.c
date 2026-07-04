@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/mm.h>
+#include <linux/mmap_lock.h>
 #include <linux/swap.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
@@ -65,7 +66,7 @@ void shatter_huge_page(unsigned long addr)
 	BUG_ON(pgd_addr_invalid(addr));
 	BUG_ON(addr < PAGE_OFFSET);  /* only for kernel LOWMEM */
 	pgd = swapper_pg_dir + pgd_index(addr);
-	pud = pud_offset(pgd, addr);
+	pud = pud_offset(p4d_offset(pgd, addr), addr);
 	BUG_ON(!pud_present(*pud));
 	pmd = pmd_offset(pud, addr);
 	BUG_ON(!pmd_present(*pmd));
@@ -88,7 +89,7 @@ void shatter_huge_page(unsigned long addr)
 	list_for_each(pos, &pgd_list) {
 		pmd_t *copy_pmd;
 		pgd = list_to_pgd(pos) + pgd_index(addr);
-		pud = pud_offset(pgd, addr);
+		pud = pud_offset(p4d_offset(pgd, addr), addr);
 		copy_pmd = pmd_offset(pud, addr);
 		__set_pmd(copy_pmd, *pmd);
 	}
@@ -183,8 +184,7 @@ void pgd_free(struct mm_struct *mm, pgd_t *pgd)
 
 #define L2_USER_PGTABLE_PAGES (1 << L2_USER_PGTABLE_ORDER)
 
-struct page *pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
-			       int order)
+struct page *pgtable_alloc_one(struct mm_struct *mm, int order)
 {
 	gfp_t flags = GFP_KERNEL|__GFP_ZERO;
 	struct page *p;
@@ -194,7 +194,7 @@ struct page *pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
 	if (p == NULL)
 		return NULL;
 
-	if (!pgtable_page_ctor(p)) {
+	if (!pagetable_pte_ctor(mm, page_ptdesc(p))) {
 		__free_pages(p, L2_USER_PGTABLE_ORDER);
 		return NULL;
 	}
@@ -206,7 +206,7 @@ struct page *pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
 	 */
 	for (i = 1; i < order; ++i) {
 		init_page_count(p+i);
-		inc_zone_page_state(p+i, NR_PAGETABLE);
+		inc_node_page_state(p+i, NR_PAGETABLE);
 	}
 
 	return p;
@@ -221,12 +221,12 @@ void pgtable_free(struct mm_struct *mm, struct page *p, int order)
 {
 	int i;
 
-	pgtable_page_dtor(p);
+	pagetable_dtor(page_ptdesc(p));
 	__free_page(p);
 
 	for (i = 1; i < order; ++i) {
 		__free_page(p+i);
-		dec_zone_page_state(p+i, NR_PAGETABLE);
+		dec_node_page_state(p+i, NR_PAGETABLE);
 	}
 }
 
@@ -235,12 +235,12 @@ void __pgtable_free_tlb(struct mmu_gather *tlb, struct page *pte,
 {
 	int i;
 
-	pgtable_page_dtor(pte);
+	pagetable_dtor(page_ptdesc(pte));
 	tlb_remove_page(tlb, pte);
 
 	for (i = 1; i < order; ++i) {
 		tlb_remove_page(tlb, pte + i);
-		dec_zone_page_state(pte + i, NR_PAGETABLE);
+		dec_node_page_state(pte + i, NR_PAGETABLE);
 	}
 }
 
@@ -302,7 +302,7 @@ pte_t *virt_to_pte(struct mm_struct* mm, unsigned long addr)
 		return NULL;
 
 	pgd = mm ? pgd_offset(mm, addr) : swapper_pg_dir + pgd_index(addr);
-	pud = pud_offset(pgd, addr);
+	pud = pud_offset(p4d_offset(pgd, addr), addr);
 	if (!pud_present(*pud))
 		return NULL;
 	if (pud_huge_page(*pud))
@@ -315,13 +315,6 @@ pte_t *virt_to_pte(struct mm_struct* mm, unsigned long addr)
 	return pte_offset_kernel(pmd, addr);
 }
 EXPORT_SYMBOL(virt_to_pte);
-
-pte_t *virt_to_kpte(unsigned long kaddr)
-{
-	BUG_ON(kaddr < PAGE_OFFSET);
-	return virt_to_pte(NULL, kaddr);
-}
-EXPORT_SYMBOL(virt_to_kpte);
 
 pgprot_t set_remote_cache_cpu(pgprot_t prot, int cpu)
 {
@@ -430,15 +423,21 @@ void start_mm_caching(struct mm_struct *mm)
  */
 static unsigned long update_priority_cached(struct mm_struct *mm)
 {
-	if (mm->context.priority_cached && down_write_trylock(&mm->mmap_sem)) {
+	/* mmap_write_trylock is gone from 7.1; the scan only reads vmas. */
+	if (mm->context.priority_cached && mmap_read_trylock(mm)) {
+		VMA_ITERATOR(vmi, mm, 0);
 		struct vm_area_struct *vm;
-		for (vm = mm->mmap; vm; vm = vm->vm_next) {
-			if (hv_pte_get_cached_priority(vm->vm_page_prot))
+		bool found = false;
+
+		for_each_vma(vmi, vm) {
+			if (hv_pte_get_cached_priority(vm->vm_page_prot)) {
+				found = true;
 				break;
+			}
 		}
-		if (vm == NULL)
+		if (!found)
 			mm->context.priority_cached = 0;
-		up_write(&mm->mmap_sem);
+		mmap_read_unlock(mm);
 	}
 	return mm->context.priority_cached;
 }

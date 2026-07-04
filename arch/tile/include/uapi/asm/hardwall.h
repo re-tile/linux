@@ -48,5 +48,11 @@
 #define HARDWALL_GET_ID \
  _IO(HARDWALL_IOCTL_BASE, _HARDWALL_GET_ID)
 
+/*
+ * si_code of the SIGILL sent for a hardwall violation.  The value is
+ * frozen ABI: asm-generic/siginfo.h defined it as 10 until the arch
+ * removal in 4.17, and existing userspace expects it.
+ */
+#define ILL_HARDWALL 10
 
 #endif /* _UAPI_ASM_TILE_HARDWALL_H */

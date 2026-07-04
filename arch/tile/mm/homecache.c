@@ -18,13 +18,12 @@
 #include <linux/mm.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
-#include <linux/bootmem.h>
+#include <linux/memblock.h>
 #include <linux/rmap.h>
 #include <linux/pagemap.h>
 #include <linux/mutex.h>
 #include <linux/interrupt.h>
 #include <linux/sysctl.h>
-#include <linux/pagevec.h>
 #include <linux/ptrace.h>
 #include <linux/timex.h>
 #include <linux/cache.h>
@@ -187,7 +186,7 @@ void homecache_finv_map_page(struct page *page, int home)
 #else
 	va = __fix_to_virt(FIX_HOMECACHE_BEGIN + smp_processor_id());
 #endif
-	ptep = virt_to_kpte(va);
+	ptep = virt_to_pte(NULL, va);
 	pte = pfn_pte(page_to_pfn(page), PAGE_KERNEL);
 	__set_pte(ptep, pte_set_home(pte, home));
 	homecache_finv_page_va((void *)va, home);
@@ -354,7 +353,7 @@ int page_home(struct page *page)
 		return PAGE_HOME_HASH;
 	} else {
 		unsigned long kva = (unsigned long)page_address(page);
-		return pte_to_home(*virt_to_kpte(kva));
+		return pte_to_home(*virt_to_pte(NULL, kva));
 	}
 }
 EXPORT_SYMBOL(page_home);
@@ -366,14 +365,14 @@ void homecache_change_page_home(struct page *page, int order, int home)
 
 	BUG_ON(PageHighMem(page));
 	BUG_ON(page_count(page) > 1);
-	BUG_ON(page_mapcount(page) != 0);
+	BUG_ON(page_mapped(page));
 	kva = (unsigned long) page_address(page);
 	flush_remote(0, HV_FLUSH_EVICT_L2, &cpu_cacheable_map,
 		     kva, pages * PAGE_SIZE, PAGE_SIZE, cpu_online_mask,
 		     NULL, 0);
 
 	for (i = 0; i < pages; ++i, kva += PAGE_SIZE) {
-		pte_t *ptep = virt_to_kpte(kva);
+		pte_t *ptep = virt_to_pte(NULL, kva);
 		pte_t pteval = *ptep;
 		BUG_ON(!pte_present(pteval) || pte_huge(pteval));
 		__set_pte(ptep, pte_set_home(pteval, home));
@@ -408,12 +407,8 @@ void __homecache_free_pages(struct page *page, unsigned int order)
 {
 	if (put_page_testzero(page)) {
 		homecache_change_page_home(page, order, PAGE_HOME_HASH);
-		if (order == 0) {
-			free_unref_page(page);
-		} else {
-			init_page_count(page);
-			__free_pages(page, order);
-		}
+		init_page_count(page);
+		__free_pages(page, order);
 	}
 }
 EXPORT_SYMBOL(__homecache_free_pages);

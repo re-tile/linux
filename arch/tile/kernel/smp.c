@@ -211,12 +211,6 @@ static irqreturn_t handle_reschedule_ipi(int irq, void *token)
 	return IRQ_HANDLED;
 }
 
-static struct irqaction resched_action = {
-	.handler = handle_reschedule_ipi,
-	.name = "resched",
-	.dev_id = handle_reschedule_ipi /* unique token */,
-};
-
 void __init ipi_init(void)
 {
 	int cpu = smp_processor_id();
@@ -253,12 +247,13 @@ void __init ipi_init(void)
 
 	/* Bind handle_reschedule_ipi() to IRQ_RESCHEDULE. */
 	tile_irq_activate(IRQ_RESCHEDULE, TILE_IRQ_PERCPU);
-	BUG_ON(setup_irq(IRQ_RESCHEDULE, &resched_action));
+	BUG_ON(request_irq(IRQ_RESCHEDULE, handle_reschedule_ipi, 0,
+			   "resched", NULL));
 }
 
 #if CHIP_HAS_IPI()
 
-void smp_send_reschedule(int cpu)
+void arch_smp_send_reschedule(int cpu)
 {
 	WARN_ON(cpu_is_offline(cpu));
 
@@ -273,7 +268,7 @@ void smp_send_reschedule(int cpu)
 
 #else
 
-void smp_send_reschedule(int cpu)
+void arch_smp_send_reschedule(int cpu)
 {
 	HV_Coord coord;
 

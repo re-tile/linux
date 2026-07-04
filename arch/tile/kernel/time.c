@@ -226,11 +226,6 @@ unsigned long long sched_clock(void)
 			 sched_clock_mult, 1ULL << SCHED_CLOCK_SHIFT);
 }
 
-int setup_profiling_timer(unsigned int multiplier)
-{
-	return -EINVAL;
-}
-
 /*
  * Use the tile timer to convert nsecs to core clock cycles, relying
  * on it having the same frequency as SPR_CYCLE.

@@ -24,4 +24,12 @@
 
 #include <asm-generic/siginfo.h>
 
+/*
+ * Tile-specific SIGILL si_codes.  These numeric values are frozen ABI
+ * (the generic header carried them under __tile__ until the arch was
+ * removed in 4.17); they alias ILL_BADIADDR/__ILL_BREAK.
+ */
+#define ILL_DBLFLT	9	/* double fault */
+#define ILL_HARDWALL	10	/* user networks hardwall violation */
+
 #endif /* _ASM_TILE_SIGINFO_H */

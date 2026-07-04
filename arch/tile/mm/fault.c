@@ -52,21 +52,15 @@ static noinline void force_sig_info_fault(const char *type, int si_signo,
 					  struct task_struct *tsk,
 					  struct pt_regs *regs)
 {
-	siginfo_t info;
-
 	if (unlikely(tsk->pid < 2)) {
 		panic("Signal %d (code %d) at %#lx sent to %s!",
 		      si_signo, si_code & 0xffff, address,
 		      is_idle_task(tsk) ? "the idle task" : "init");
 	}
 
-	info.si_signo = si_signo;
-	info.si_errno = 0;
-	info.si_code = si_code;
-	info.si_addr = (void __user *)address;
-	info.si_trapno = fault_num;
 	trace_unhandled_signal(type, regs, address, si_signo);
-	force_sig_info(si_signo, &info, tsk);
+	force_sig_fault_trapno(si_signo, si_code, (void __user *)address,
+			       fault_num);
 }
 
 #ifndef __tilegx__
@@ -117,8 +111,8 @@ static inline pmd_t *vmalloc_sync_one(pgd_t *pgd, unsigned long address)
 	if (!pgd_present(*pgd_k))
 		return NULL;
 
-	pud = pud_offset(pgd, address);
-	pud_k = pud_offset(pgd_k, address);
+	pud = pud_offset(p4d_offset(pgd, address), address);
+	pud_k = pud_offset(p4d_offset(pgd_k, address), address);
 	if (!pud_present(*pud_k))
 		return NULL;
 
@@ -223,7 +217,7 @@ static int handle_migrating_pte(pgd_t *pgd, int fault_num,
 		return 0;
 
 	pgd += pgd_index(address);
-	pud = pud_offset(pgd, address);
+	pud = pud_offset(p4d_offset(pgd, address), address);
 	if (!pud || !pud_present(*pud))
 		return 0;
 	pmd = pmd_offset(pud, address);
@@ -270,7 +264,7 @@ static int handle_page_fault(struct pt_regs *regs,
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 	unsigned long stack_offset;
-	int fault;
+	vm_fault_t fault;
 	int si_code;
 	int is_kernel_mode;
 	pgd_t *pgd;
@@ -280,7 +274,7 @@ static int handle_page_fault(struct pt_regs *regs,
 	if (!is_page_fault)
 		write = 1;
 
-	flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
+	flags = FAULT_FLAG_DEFAULT;
 
 	is_kernel_mode = !user_mode(regs);
 
@@ -328,8 +322,7 @@ static int handle_page_fault(struct pt_regs *regs,
 	 * This verifies that the fault happens in kernel space
 	 * and that the fault was not a protection fault.
 	 */
-	if (unlikely(address >= TASK_SIZE &&
-		     !is_arch_mappable_range(address, 0))) {
+	if (unlikely(address >= TASK_SIZE)) {
 		if (is_kernel_mode && is_page_fault &&
 		    vmalloc_fault(pgd, address) >= 0)
 			return 1;
@@ -382,7 +375,7 @@ static int handle_page_fault(struct pt_regs *regs,
 	 * source.  If this is invalid we can skip the address space check,
 	 * thus avoiding the deadlock.
 	 */
-	if (!down_read_trylock(&mm->mmap_sem)) {
+	if (!mmap_read_trylock(mm)) {
 		if (is_kernel_mode &&
 		    !search_exception_tables(regs->pc)) {
 			vma = NULL;  /* happy compiler */
@@ -390,7 +383,7 @@ static int handle_page_fault(struct pt_regs *regs,
 		}
 
 retry:
-		down_read(&mm->mmap_sem);
+		mmap_read_lock(mm);
 	}
 
 	vma = find_vma(mm, address);
@@ -407,8 +400,9 @@ retry:
 		if (address < regs->sp)
 			goto bad_area;
 	}
-	if (expand_stack(vma, address))
-		goto bad_area;
+	vma = expand_stack(mm, address);
+	if (!vma)
+		goto bad_area_nosemaphore;
 
 /*
  * Ok, we have a good vm_area for this memory access, so
@@ -437,10 +431,17 @@ good_area:
 	 * make sure we exit gracefully rather than endlessly redo
 	 * the fault.
 	 */
-	fault = handle_mm_fault(vma, address, flags);
+	fault = handle_mm_fault(vma, address, flags, regs);
 
-	if ((fault & VM_FAULT_RETRY) && fatal_signal_pending(current))
+	if (fault_signal_pending(fault, regs)) {
+		if (is_kernel_mode)
+			goto no_context;
 		return 0;
+	}
+
+	/* The fault is fully completed (including releasing mmap lock) */
+	if (fault & VM_FAULT_COMPLETED)
+		return 1;
 
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
@@ -451,22 +452,15 @@ good_area:
 			goto do_sigbus;
 		BUG();
 	}
-	if (flags & FAULT_FLAG_ALLOW_RETRY) {
-		if (fault & VM_FAULT_MAJOR)
-			tsk->maj_flt++;
-		else
-			tsk->min_flt++;
-		if (fault & VM_FAULT_RETRY) {
-			flags &= ~FAULT_FLAG_ALLOW_RETRY;
-			flags |= FAULT_FLAG_TRIED;
+	if (fault & VM_FAULT_RETRY) {
+		flags |= FAULT_FLAG_TRIED;
 
-			 /*
-			  * No need to up_read(&mm->mmap_sem) as we would
-			  * have already released it in __lock_page_or_retry
-			  * in mm/filemap.c.
-			  */
-			goto retry;
-		}
+		 /*
+		  * No need to mmap_read_unlock(mm) as we would
+		  * have already released it in __lock_page_or_retry
+		  * in mm/filemap.c.
+		  */
+		goto retry;
 	}
 
 #if CHIP_HAS_TILE_DMA()
@@ -481,7 +475,7 @@ good_area:
 	}
 #endif
 
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 	return 1;
 
 /*
@@ -489,7 +483,7 @@ good_area:
  * Fix it, but check if it's kernel or user first..
  */
 bad_area:
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 
 bad_area_nosemaphore:
 	/* User mode accesses just cause a SIGSEGV */
@@ -556,14 +550,14 @@ no_context:
  * us unable to handle the page fault gracefully.
  */
 out_of_memory:
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 	if (is_kernel_mode)
 		goto no_context;
 	pagefault_out_of_memory();
 	return 0;
 
 do_sigbus:
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 
 	/* Kernel mode? Handle exceptions or die */
 	if (is_kernel_mode)

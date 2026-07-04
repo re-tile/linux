@@ -37,6 +37,10 @@ static struct page **vdso32_pagelist;
 #endif
 static int vdso_ready;
 
+static struct vm_special_mapping vdso_mapping = {
+	.name = "[vdso]",
+};
+
 /*
  * The vdso data page.
  */
@@ -126,6 +130,7 @@ int setup_vdso_pages(void)
 	struct page **pagelist;
 	unsigned long pages;
 	struct mm_struct *mm = current->mm;
+	struct vm_area_struct *vma;
 	unsigned long vdso_base = 0;
 	int retval = 0;
 
@@ -179,13 +184,16 @@ int setup_vdso_pages(void)
 	 * It's fine to use that for setting breakpoints in the vDSO code
 	 * pages though
 	 */
-	retval = install_special_mapping(mm, vdso_base,
-					 pages << PAGE_SHIFT,
-					 VM_READ|VM_EXEC |
-					 VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC,
-					 pagelist);
-	if (retval)
+	vdso_mapping.pages = pagelist;
+	vma = _install_special_mapping(mm, vdso_base,
+				       pages << PAGE_SHIFT,
+				       VM_READ|VM_EXEC |
+				       VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC,
+				       &vdso_mapping);
+	if (IS_ERR(vma)) {
+		retval = PTR_ERR(vma);
 		mm->context.vdso_base = 0;
+	}
 
 	return retval;
 }
