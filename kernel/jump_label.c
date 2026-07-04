@@ -544,7 +544,13 @@ void __init jump_label_init(void)
 		if (jump_label_type(iter) == JUMP_LABEL_NOP)
 			arch_jump_label_transform_static(iter, JUMP_LABEL_NOP);
 
-		in_init = init_section_contains((void *)jump_entry_code(iter), 1);
+		/*
+		 * tile keeps its init text in the high text segment, outside
+		 * [__init_begin, __init_end), so also treat kernel init text
+		 * as init or the entry gets patched after free_initmem.
+		 */
+		in_init = init_section_contains((void *)jump_entry_code(iter), 1) ||
+			  is_kernel_inittext(jump_entry_code(iter));
 		jump_entry_set_init(iter, in_init);
 
 		iterk = jump_entry_key(iter);
