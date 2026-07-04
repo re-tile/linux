@@ -1,7 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-menu "Kernel hacking"
-
-source "lib/Kconfig.debug"
 
 config EARLY_PRINTK
 	bool "Early printk" if EXPERT && DEBUG_KERNEL
@@ -22,5 +19,3 @@ config TILE_HVGLUE_TRACE
 	  Provide wrapper functions for the hypervisor ABI calls
 	  defined in arch/tile/kernel/hvglue.S.  This allows tracing
 	  mechanisms, etc., to have visibility into those calls.
-
-endmenu
