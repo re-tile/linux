@@ -23,17 +23,16 @@
 #include <asm/cacheflush.h>
 #include <asm/insn.h>
 
-#ifdef HAVE_JUMP_LABEL
-
 static void __jump_label_transform(struct jump_entry *e,
 				   enum jump_label_type type)
 {
 	tilegx_bundle_bits opcode;
 	/* Operate on writable kernel text mapping. */
-	unsigned long pc_wr = ktext_writable_addr(e->code);
+	unsigned long pc_wr = ktext_writable_addr(jump_entry_code(e));
 
 	if (type == JUMP_LABEL_JMP)
-		opcode = tilegx_gen_branch(e->code, e->target, false);
+		opcode = tilegx_gen_branch(jump_entry_code(e),
+					   jump_entry_target(e), false);
 	else
 		opcode = NOP();
 
@@ -48,15 +47,8 @@ void arch_jump_label_transform(struct jump_entry *e,
 	mutex_lock(&text_mutex);
 
 	__jump_label_transform(e, type);
-	flush_icache_range(e->code, e->code + sizeof(tilegx_bundle_bits));
+	flush_icache_range(jump_entry_code(e),
+			   jump_entry_code(e) + sizeof(tilegx_bundle_bits));
 
 	mutex_unlock(&text_mutex);
 }
-
-__init_or_module void arch_jump_label_transform_static(struct jump_entry *e,
-						enum jump_label_type type)
-{
-	__jump_label_transform(e, type);
-}
-
-#endif /* HAVE_JUMP_LABEL */

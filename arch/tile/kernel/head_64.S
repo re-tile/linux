@@ -211,12 +211,6 @@ ENTRY(_start)
 	}
 	ENDPROC(_start)
 
-__PAGE_ALIGNED_BSS
-	.align PAGE_SIZE
-ENTRY(empty_zero_page)
-	.fill PAGE_SIZE,1,0
-	END(empty_zero_page)
-
 	.macro PTE cpa, bits1
 	.quad HV_PTE_PAGE | HV_PTE_DIRTY | HV_PTE_PRESENT | HV_PTE_ACCESSED |\
 	      HV_PTE_GLOBAL | (HV_PTE_MODE_CACHE_NO_L3 << HV_PTE_INDEX_MODE) |\

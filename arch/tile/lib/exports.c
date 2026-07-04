@@ -27,9 +27,6 @@ EXPORT_SYMBOL(finv_user_asm);
 #include <asm/processor.h>
 EXPORT_SYMBOL(current_text_addr);
 
-/* arch/tile/kernel/head.S */
-EXPORT_SYMBOL(empty_zero_page);
-
 #ifdef CONFIG_FUNCTION_TRACER
 /* arch/tile/kernel/mcount_64.S */
 #include <asm/ftrace.h>
