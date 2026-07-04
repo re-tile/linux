@@ -66,12 +66,6 @@ static inline void copy_page(void *to, void *from)
 	memcpy(to, from, PAGE_SIZE);
 }
 
-static inline void clear_user_page(void *page, unsigned long vaddr,
-				struct page *pg)
-{
-	clear_page(page);
-}
-
 static inline void copy_user_page(void *to, void *from, unsigned long vaddr,
 				struct page *topage)
 {
@@ -326,7 +320,6 @@ extern int devmem_is_allowed(unsigned long pagenr);
 
 struct mm_struct;
 extern pte_t *virt_to_pte(struct mm_struct *mm, unsigned long addr);
-extern pte_t *virt_to_kpte(unsigned long kaddr);
 
 #endif /* !__ASSEMBLY__ */
 

@@ -32,10 +32,6 @@
 struct task_struct;
 struct thread_struct;
 
-typedef struct {
-	unsigned long seg;
-} mm_segment_t;
-
 /*
  * Default implementation of macro that returns current
  * instruction pointer ("program counter").
