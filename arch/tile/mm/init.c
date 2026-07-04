@@ -270,6 +270,16 @@ static pgprot_t __init init_pgprot(ulong address)
 	if (address < (ulong) _sinittext - CODE_DELTA)
 		return construct_pgprot(PAGE_KERNEL, PAGE_HOME_HASH);
 
+	/*
+	 * .data..ro_after_init sits inside the modern rodata span but is
+	 * written during init (the jump table gets sorted in place, etc.),
+	 * so keep any page overlapping it writable and hash homed.  tile
+	 * never runs mark_rodata_ro, so those pages simply stay writable.
+	 */
+	if (address >= ((ulong) __start_ro_after_init & PAGE_MASK) &&
+	    address < PAGE_ALIGN((ulong) __end_ro_after_init))
+		return construct_pgprot(PAGE_KERNEL, PAGE_HOME_HASH);
+
 	/* We map read-only data non-coherent for performance. */
 	if ((address >= (ulong) __start_rodata &&
 	     address < (ulong) __end_rodata) ||
@@ -792,8 +802,6 @@ void __init paging_init(void)
 				    VMALLOC_START), VMALLOC_START);
 	assign_pmd(pud, alloc_pmd());
 #endif
-
-	pgtable_cache_init();
 }
 
 
