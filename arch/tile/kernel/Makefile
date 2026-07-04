@@ -3,8 +3,8 @@
 # Makefile for the Linux/TILE kernel.
 #
 
-extra-y := vmlinux.lds head_$(BITS).o
-obj-y := backtrace.o entry.o hvglue.o irq.o messaging.o \
+extra-y := vmlinux.lds
+obj-y := head_$(BITS).o backtrace.o entry.o hvglue.o irq.o messaging.o \
 	proc.o process.o ptrace.o reboot.o \
 	setup.o signal.o single_step.o stack.o sys.o \
 	sysfs.o time.o traps.o unaligned.o vdso.o \

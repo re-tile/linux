@@ -753,7 +753,7 @@ intvec_\vecname:
 	}
 	wh64    r52
 
-#if defined(CONFIG_TRACE_IRQFLAGS) || defined(CONFIG_CONTEXT_TRACKING)
+#if defined(CONFIG_TRACE_IRQFLAGS) || defined(CONFIG_CONTEXT_TRACKING_USER)
 	.ifnc \function,handle_nmi
 	/*
 	 * We finally have enough state set up to notify the irq
@@ -769,7 +769,7 @@ intvec_\vecname:
 	{ move r32, r2; move r33, r3 }
 	.endif
 	TRACE_IRQS_OFF
-#ifdef CONFIG_CONTEXT_TRACKING
+#ifdef CONFIG_CONTEXT_TRACKING_USER
 	jal     context_tracking_user_exit
 #endif
 	.ifnc \function,handle_syscall

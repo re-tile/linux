@@ -43,7 +43,6 @@ SECTIONS
   .text : AT (ADDR(.text) - LOAD_OFFSET) {
     HEAD_TEXT
     SCHED_TEXT
-    CPUIDLE_TEXT
     LOCK_TEXT
     KPROBES_TEXT
     IRQENTRY_TEXT
@@ -87,8 +86,8 @@ SECTIONS
   __init_end = .;
 
   _sdata = .;                   /* Start of data section */
-  RO_DATA_SECTION(PAGE_SIZE)
-  RW_DATA_SECTION(L2_CACHE_BYTES, PAGE_SIZE, THREAD_SIZE)
+  RO_DATA(PAGE_SIZE)
+  RW_DATA(L2_CACHE_BYTES, PAGE_SIZE, THREAD_SIZE)
   _edata = .;
 
   EXCEPTION_TABLE(L2_CACHE_BYTES)

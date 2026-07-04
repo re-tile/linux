@@ -197,6 +197,18 @@ static int symbol_valid(const struct sym_entry *s)
 {
 	const char *name = sym_name(s);
 
+	/*
+	 * tile places data several TB away from text, so __start_/__stop_
+	 * section symbols cannot be encoded as s32 pc-relative entries;
+	 * drop them instead of failing the link.
+	 */
+	if (pc_relative) {
+		long long offset = s->addr - _text;
+
+		if (offset < INT_MIN || offset > INT_MAX)
+			return 0;
+	}
+
 	/* if --all-symbols is not specified, then symbols outside the text
 	 * and inittext sections are discarded */
 	if (!all_symbols) {
