@@ -1435,9 +1435,13 @@ PTREGS_SYSCALL_SIGRETURN(sys_rt_sigreturn, r0)
 PTREGS_SYSCALL_SIGRETURN(compat_sys_rt_sigreturn, r0)
 #endif
 
-/* Save additional callee-saves to pt_regs and jump to standard function. */
+/* Save additional callee-saves to pt_regs and jump to standard function.
+   push_extra_callee_saves clobbers its scratch register, so it must not be
+   one of the clone() argument registers r0-r4.  The generic 5-argument
+   sys_clone takes tls in r4; clobbering it here would install a garbage
+   thread pointer in the new thread.  Use r5, which clone does not use.  */
 STD_ENTRY(_sys_clone)
-	push_extra_callee_saves r4
+	push_extra_callee_saves r5
 	j       sys_clone
 	STD_ENDPROC(_sys_clone)
 

@@ -55,9 +55,14 @@ SYSCFLAGS_vdso_dummy.o = -r
 $(obj)/vdso-dummy.o: $(src)/vdso.lds $(obj)/vrt_sigreturn.o FORCE
 	$(call if_changed,vdsold)
 
-LDFLAGS_vdso-syms.o := -r -R
+# binutils >= 2.41 aborts on `ld -r`/`--just-symbols` against the dynamic
+# vdso-dummy.o ("attempted static link of dynamic object"). Re-emit its
+# __vdso_* offsets as absolute symbols and assemble those instead; this yields
+# the identical absolute symbol table the kernel links against.
+quiet_cmd_vdsosym = VDSOSYM $@
+      cmd_vdsosym = $(NM) $< | $(AWK) '/ __vdso_/ { printf ".global %s\n%s = 0x%s\n", $$3, $$3, $$1 }' | $(CC) -x assembler -c - -o $@
 $(obj)/vdso-syms.o: $(obj)/vdso-dummy.o FORCE
-	$(call if_changed,ld)
+	$(call if_changed,vdsosym)
 
 # strip rule for the .so file
 $(obj)/%.so: OBJCOPYFLAGS := -S
