@@ -241,7 +241,11 @@ static int __init crash_save_vmcoreinfo_init(void)
 	VMCOREINFO_SYMBOL(kallsyms_num_syms);
 	VMCOREINFO_SYMBOL(kallsyms_token_table);
 	VMCOREINFO_SYMBOL(kallsyms_token_index);
+#ifdef CONFIG_KALLSYMS_ABSOLUTE
+	VMCOREINFO_SYMBOL(kallsyms_addresses);
+#else
 	VMCOREINFO_SYMBOL(kallsyms_offsets);
+#endif
 #endif /* CONFIG_KALLSYMS */
 
 	arch_crash_save_vmcoreinfo();

@@ -2106,6 +2106,13 @@ config KALLSYMS
 	  symbolic stack backtraces. This increases the size of the kernel
 	  somewhat, as all symbols have to be loaded into the kernel image.
 
+# An architecture selects this when no single 32-bit offset base can
+# reach all of its symbols (e.g. tile links data ~2TB below text); the
+# symbol table is then emitted as absolute 64-bit addresses.
+config KALLSYMS_ABSOLUTE
+	bool
+	depends on KALLSYMS
+
 config KALLSYMS_SELFTEST
 	bool "Test the basic functions and performance of kallsyms"
 	depends on KALLSYMS
