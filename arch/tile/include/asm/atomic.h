@@ -24,6 +24,8 @@
 #include <linux/compiler.h>
 #include <linux/types.h>
 
+#define ATOMIC64_INIT(i)	{ (i) }
+
 static inline int arch_atomic_read(const atomic_t *v)
 {
 	return READ_ONCE(v->counter);

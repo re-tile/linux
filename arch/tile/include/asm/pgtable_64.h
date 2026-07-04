@@ -119,11 +119,6 @@ static inline int pud_bad(pud_t pud)
  */
 #define pud_page(pud) pfn_to_page(PFN_DOWN(HV_PTFN_TO_CPA(pud_ptfn(pud))))
 
-static inline unsigned long pud_index(unsigned long address)
-{
-	return (address >> PUD_SHIFT) & (PTRS_PER_PUD - 1);
-}
-
 #define pmd_offset(pud, address) \
 	((pmd_t *)pud_page_vaddr(*(pud)) + pmd_index(address))
 

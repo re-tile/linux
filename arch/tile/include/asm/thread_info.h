@@ -33,8 +33,6 @@ struct thread_info {
 	int			preempt_count;	/* 0 => preemptable,
 						   <0 => BUG */
 
-	mm_segment_t		addr_limit;	/* thread address space
-						   (KERNEL_DS or USER_DS) */
 	struct single_step_state *step_state;	/* single step state
 						   (if non-zero) */
 	int			align_ctl;	/* controls unaligned access */
@@ -54,7 +52,6 @@ struct thread_info {
 	.flags		= 0,			\
 	.cpu		= 0,			\
 	.preempt_count	= INIT_PREEMPT_COUNT,	\
-	.addr_limit	= KERNEL_DS,		\
 	.step_state	= NULL,			\
 	.align_ctl	= 0,			\
 }
@@ -123,6 +120,7 @@ extern void _cpu_idle(void);
 #define TIF_SYSCALL_TRACEPOINT	9	/* syscall tracepoint instrumentation */
 #define TIF_POLLING_NRFLAG	10	/* idle is polling for TIF_NEED_RESCHED */
 #define TIF_NOHZ		11	/* in adaptive nohz mode */
+#define TIF_NOTIFY_SIGNAL	12	/* signal notifications exist */
 
 #define _TIF_SIGPENDING		(1<<TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1<<TIF_NEED_RESCHED)
@@ -136,11 +134,12 @@ extern void _cpu_idle(void);
 #define _TIF_SYSCALL_TRACEPOINT	(1<<TIF_SYSCALL_TRACEPOINT)
 #define _TIF_POLLING_NRFLAG	(1<<TIF_POLLING_NRFLAG)
 #define _TIF_NOHZ		(1<<TIF_NOHZ)
+#define _TIF_NOTIFY_SIGNAL	(1<<TIF_NOTIFY_SIGNAL)
 
 /* Work to do as we loop to exit to user space. */
 #define _TIF_WORK_MASK \
 	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | \
-	 _TIF_ASYNC_TLB | _TIF_NOTIFY_RESUME)
+	 _TIF_ASYNC_TLB | _TIF_NOTIFY_RESUME | _TIF_NOTIFY_SIGNAL)
 
 /* Work to do on any return to user space. */
 #define _TIF_ALLWORK_MASK \

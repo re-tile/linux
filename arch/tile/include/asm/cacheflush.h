@@ -34,8 +34,6 @@
 #define flush_dcache_mmap_unlock(mapping)	do { } while (0)
 #define flush_cache_vmap(start, end)		do { } while (0)
 #define flush_cache_vunmap(start, end)		do { } while (0)
-#define flush_icache_page(vma, pg)		do { } while (0)
-#define flush_icache_user_range(vma, pg, adr, len)	do { } while (0)
 
 /* Flush the icache just on this cpu */
 extern void __flush_icache_range(unsigned long start, unsigned long end);

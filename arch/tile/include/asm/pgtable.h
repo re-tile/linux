@@ -39,9 +39,6 @@ struct vm_area_struct;
  * ZERO_PAGE is a global shared page that is always zero: used
  * for zero-mapped memory areas etc..
  */
-extern unsigned long empty_zero_page[PAGE_SIZE/sizeof(unsigned long)];
-#define ZERO_PAGE(vaddr) (virt_to_page(empty_zero_page))
-
 extern pgd_t swapper_pg_dir[];
 extern pgprot_t swapper_pgprot;
 extern struct kmem_cache *pgd_cache;
@@ -210,12 +207,16 @@ static inline void __pte_clear(pte_t *ptep)
 #define pte_mkexec hv_pte_set_executable
 #define pte_mkdirty hv_pte_set_dirty
 #define pte_mkyoung hv_pte_set_accessed
-#define pte_mkwrite hv_pte_set_writable
+#define pte_mkwrite_novma hv_pte_set_writable
 #define pte_mkhuge hv_pte_set_page
 #define pte_mksuper hv_pte_set_super
 
-#define pte_special(pte) 0
-#define pte_mkspecial(pte) (pte)
+/*
+ * The PTFN sits at HV_PTE_INDEX_PTFN in units of HV_PAGE_TABLE_ALIGN (2KB),
+ * so consecutive pfns advance the pte value by this power of two.
+ */
+#define PFN_PTE_SHIFT \
+	(HV_PTE_INDEX_PTFN + PAGE_SHIFT - HV_LOG2_PAGE_TABLE_ALIGN)
 
 /*
  * Use some spare bits in the PTE for user-caching tags.
@@ -256,7 +257,6 @@ void __set_pte(pte_t *ptep, pte_t pte);
  * caching attributes if "!forcecache", or the home cpu if "anyhome".
  */
 extern void set_pte(pte_t *ptep, pte_t pte);
-#define set_pte_at(mm, addr, ptep, pteval) set_pte(ptep, pteval)
 #define set_pte_atomic(pteptr, pteval) set_pte(pteptr, pteval)
 
 #define pte_page(x)		pfn_to_page(pte_pfn(x))
@@ -300,8 +300,6 @@ extern void check_mm_caching(struct mm_struct *prev, struct mm_struct *next);
  * and a page entry and page directory to the page they refer to.
  */
 
-#define mk_pte(page, pgprot)	pfn_pte(page_to_pfn(page), (pgprot))
-
 /*
  * If we are doing an mprotect(), just accept the new vma->vm_page_prot
  * value and combine it with the PFN from the old PTE to get a new PTE.
@@ -323,16 +321,11 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
  * pgd_offset() returns a (pgd_t *)
  * pgd_index() is used get the offset into the pgd page's array of pgd_t's.
  */
-#define pgd_offset(mm, address) ((mm)->pgd + pgd_index(address))
 
 /*
  * A shortcut which implies the use of the kernel's pgd, instead
  * of a process's.
  */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
-
-#define pte_offset_map(dir, address) pte_offset_kernel(dir, address)
-#define pte_unmap(pte) do { } while (0)
 
 /* Clear a non-executable kernel PTE and flush it from the TLB. */
 #define kpte_clear_flush(ptep, vaddr)		\
@@ -393,11 +386,6 @@ static inline unsigned long pages_to_mb(unsigned long npg)
  * This function returns the index of the entry in the pmd which would
  * control the given virtual address.
  */
-static inline unsigned long pmd_index(unsigned long address)
-{
-	return (address >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
-}
-
 #define __HAVE_ARCH_PMDP_TEST_AND_CLEAR_YOUNG
 static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 					    unsigned long address,
@@ -495,16 +483,6 @@ static inline pmd_t pmd_modify(pmd_t pmd, pgprot_t newprot)
  * This macro returns the index of the entry in the pte page which would
  * control the given virtual address.
  */
-static inline unsigned long pte_index(unsigned long address)
-{
-	return (address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1);
-}
-
-static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
-{
-       return (pte_t *)pmd_page_vaddr(*pmd) + pte_index(address);
-}
-
 
 
 /* Support /proc/NN/pgtable API. */
