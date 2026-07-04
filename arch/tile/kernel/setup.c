@@ -621,6 +621,18 @@ static void __init setup_bootmem_allocator_node(int i)
 static void __init setup_bootmem_allocator(void)
 {
 	int i;
+
+	/*
+	 * The boot page table from head_64.S covers only the first 4GB
+	 * (one pmd) of the linear map, and the full kernel page table is
+	 * not installed until paging_init().  Allocate bottom up like the
+	 * old bootmem goal 0 did so early allocations (including the page
+	 * tables themselves) stay inside the mapped region.  Top down
+	 * allocation returns top of node 0 memory and the memset in
+	 * memblock_alloc takes an unresolvable DTLB miss.
+	 */
+	memblock_set_bottom_up(true);
+
 	for (i = 0; i < MAX_NUMNODES; ++i)
 		setup_bootmem_allocator_node(i);
 
