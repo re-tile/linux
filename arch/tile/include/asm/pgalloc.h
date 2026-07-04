@@ -68,14 +68,12 @@ static inline void pmd_populate(struct mm_struct *mm, pmd_t *pmd,
 extern pgd_t *pgd_alloc(struct mm_struct *mm);
 extern void pgd_free(struct mm_struct *mm, pgd_t *pgd);
 
-extern pgtable_t pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
-				   int order);
+extern pgtable_t pgtable_alloc_one(struct mm_struct *mm, int order);
 extern void pgtable_free(struct mm_struct *mm, struct page *pte, int order);
 
-static inline pgtable_t pte_alloc_one(struct mm_struct *mm,
-				      unsigned long address)
+static inline pgtable_t pte_alloc_one(struct mm_struct *mm)
 {
-	return pgtable_alloc_one(mm, address, L2_USER_PGTABLE_ORDER);
+	return pgtable_alloc_one(mm, L2_USER_PGTABLE_ORDER);
 }
 
 static inline void pte_free(struct mm_struct *mm, struct page *pte)
@@ -85,10 +83,11 @@ static inline void pte_free(struct mm_struct *mm, struct page *pte)
 
 #define pmd_pgtable(pmd) pmd_page(pmd)
 
-static inline pte_t *
-pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
+static inline pte_t *pte_alloc_one_kernel(struct mm_struct *mm)
 {
-	return pfn_to_kaddr(page_to_pfn(pte_alloc_one(mm, address)));
+	pgtable_t page = pte_alloc_one(mm);
+
+	return page ? pfn_to_kaddr(page_to_pfn(page)) : NULL;
 }
 
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
@@ -104,8 +103,6 @@ static inline void __pte_free_tlb(struct mmu_gather *tlb, struct page *pte,
 {
 	__pgtable_free_tlb(tlb, pte, address, L2_USER_PGTABLE_ORDER);
 }
-
-#define check_pgt_cache()	do { } while (0)
 
 /*
  * Get the small-page pte_t lowmem entry for a given pfn.
@@ -143,8 +140,9 @@ void shatter_huge_page(unsigned long addr);
 
 static inline pmd_t *pmd_alloc_one(struct mm_struct *mm, unsigned long address)
 {
-	struct page *p = pgtable_alloc_one(mm, address, L1_USER_PGTABLE_ORDER);
-	return (pmd_t *)page_to_virt(p);
+	struct page *p = pgtable_alloc_one(mm, L1_USER_PGTABLE_ORDER);
+
+	return p ? (pmd_t *)page_to_virt(p) : NULL;
 }
 
 static inline void pmd_free(struct mm_struct *mm, pmd_t *pmdp)

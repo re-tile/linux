@@ -149,16 +149,28 @@ static int tmfifo_open(struct inode *inode, struct file *filp)
 		goto err_free_buf;
 	}
 
-	/* Create our IRQs and register them. */
-	dev->readable_irq = irq_alloc_hwirq(-1);
-	if (!dev->readable_irq) {
+	/*
+	 * Create our IRQs and register them.  The desc number doubles as the
+	 * hv IPI event bit, and the sparse allocator's bitmap extends past
+	 * NR_IRQS, so reject anything without a hw event bit behind it.
+	 */
+	dev->readable_irq = irq_alloc_desc(NUMA_NO_NODE);
+	if (dev->readable_irq < 0) {
 		retval = -ENXIO;
 		goto err_close_hv;
 	}
-	dev->writable_irq = irq_alloc_hwirq(-1);
-	if (!dev->writable_irq) {
+	if (dev->readable_irq >= NR_IRQS) {
 		retval = -ENXIO;
 		goto err_dest_r_irq;
+	}
+	dev->writable_irq = irq_alloc_desc(NUMA_NO_NODE);
+	if (dev->writable_irq < 0) {
+		retval = -ENXIO;
+		goto err_dest_r_irq;
+	}
+	if (dev->writable_irq >= NR_IRQS) {
+		retval = -ENXIO;
+		goto err_dest_w_irq;
 	}
 
 	tile_irq_activate(dev->readable_irq, TILE_IRQ_PERCPU);
@@ -202,9 +214,9 @@ err_free_w_irq:
 err_free_r_irq:
 	free_irq(dev->readable_irq, dev);
 err_dest_w_irq:
-	irq_free_hwirq(dev->writable_irq);
+	irq_free_desc(dev->writable_irq);
 err_dest_r_irq:
-	irq_free_hwirq(dev->readable_irq);
+	irq_free_desc(dev->readable_irq);
 err_close_hv:
 	hv_dev_close(dev->hv_devhdl);
 err_free_buf:
@@ -253,8 +265,8 @@ static int tmfifo_release(struct inode *inode, struct file *filp)
 	free_irq(dev->readable_irq, dev);
 	free_irq(dev->writable_irq, dev);
 
-	irq_free_hwirq(dev->readable_irq);
-	irq_free_hwirq(dev->writable_irq);
+	irq_free_desc(dev->readable_irq);
+	irq_free_desc(dev->writable_irq);
 
 	/* Mark the device as no longer open. */
 

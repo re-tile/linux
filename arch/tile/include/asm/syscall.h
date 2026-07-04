@@ -40,6 +40,12 @@ static inline int syscall_get_nr(struct task_struct *t, struct pt_regs *regs)
 	return regs->regs[TREG_SYSCALL_NR];
 }
 
+static inline void syscall_set_nr(struct task_struct *t, struct pt_regs *regs,
+				  int nr)
+{
+	regs->regs[TREG_SYSCALL_NR] = nr;
+}
+
 static inline void syscall_rollback(struct task_struct *task,
 				    struct pt_regs *regs)
 {
@@ -76,27 +82,23 @@ static inline void syscall_set_return_value(struct task_struct *task,
 
 static inline void syscall_get_arguments(struct task_struct *task,
 					 struct pt_regs *regs,
-					 unsigned int i, unsigned int n,
 					 unsigned long *args)
 {
-	BUG_ON(i + n > 6);
-	memcpy(args, &regs[i], n * sizeof(args[0]));
+	memcpy(args, &regs->regs[0], 6 * sizeof(args[0]));
 }
 
 static inline void syscall_set_arguments(struct task_struct *task,
 					 struct pt_regs *regs,
-					 unsigned int i, unsigned int n,
 					 const unsigned long *args)
 {
-	BUG_ON(i + n > 6);
-	memcpy(&regs[i], args, n * sizeof(args[0]));
+	memcpy(&regs->regs[0], args, 6 * sizeof(args[0]));
 }
 
 /*
  * We don't care about endianness (__AUDIT_ARCH_LE bit) here because
  * tile has the same system calls both on little- and big- endian.
  */
-static inline int syscall_get_arch(void)
+static inline int syscall_get_arch(struct task_struct *task)
 {
 	if (is_compat_task())
 		return AUDIT_ARCH_TILEGX32;

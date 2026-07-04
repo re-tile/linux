@@ -51,24 +51,11 @@ struct prev_kprobe {
 	unsigned long saved_pc;
 };
 
-#define MAX_JPROBES_STACK_SIZE 128
-#define MAX_JPROBES_STACK_ADDR \
-	(((unsigned long)current_thread_info()) + THREAD_SIZE - 32 \
-		- sizeof(struct pt_regs))
-
-#define MIN_JPROBES_STACK_SIZE(ADDR)					\
-	((((ADDR) + MAX_JPROBES_STACK_SIZE) > MAX_JPROBES_STACK_ADDR)	\
-		? MAX_JPROBES_STACK_ADDR - (ADDR)			\
-		: MAX_JPROBES_STACK_SIZE)
-
 /* per-cpu kprobe control block. */
 struct kprobe_ctlblk {
 	unsigned long kprobe_status;
 	unsigned long kprobe_saved_pc;
-	unsigned long jprobe_saved_sp;
 	struct prev_kprobe prev_kprobe;
-	struct pt_regs jprobe_saved_regs;
-	char jprobes_stack[MAX_JPROBES_STACK_SIZE];
 };
 
 extern tile_bundle_bits breakpoint2_insn;
@@ -76,7 +63,7 @@ extern tile_bundle_bits breakpoint_insn;
 
 void arch_remove_kprobe(struct kprobe *);
 
-int kprobe_fault_handler(struct pt_regs *regs, unsigned int trapnr);
+int kprobe_fault_handler(struct pt_regs *regs, int trapnr);
 
 extern int kprobe_exceptions_notify(struct notifier_block *self,
 			     unsigned long val, void *data);

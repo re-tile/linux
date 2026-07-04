@@ -5,7 +5,7 @@
 
 extra-y := vmlinux.lds head_$(BITS).o
 obj-y := backtrace.o entry.o hvglue.o irq.o messaging.o \
-	pci-dma.o proc.o process.o ptrace.o reboot.o \
+	proc.o process.o ptrace.o reboot.o \
 	setup.o signal.o single_step.o stack.o sys.o \
 	sysfs.o time.o traps.o unaligned.o vdso.o \
 	intvec_$(BITS).o regs_$(BITS).o tile-desc_$(BITS).o
@@ -26,6 +26,7 @@ obj-$(CONFIG_PCI)		+= pci_gx.o
 else
 obj-$(CONFIG_PCI)		+= pci.o
 endif
+obj-$(CONFIG_PCI)		+= pci-dma.o
 obj-$(CONFIG_PERF_EVENTS)	+= perf_event.o
 obj-$(CONFIG_USE_PMC)		+= pmc.o
 obj-$(CONFIG_TILE_USB)		+= usb.o

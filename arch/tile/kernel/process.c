@@ -28,7 +28,7 @@
 #include <linux/nmi.h>
 #include <linux/syscalls.h>
 #include <linux/kernel.h>
-#include <linux/tracehook.h>
+#include <linux/resume_user_mode.h>
 #include <linux/signal.h>
 #include <linux/delay.h>
 #include <linux/context_tracking.h>
@@ -73,39 +73,12 @@ void arch_cpu_idle(void)
 	_cpu_idle();
 }
 
-/*
- * Release a thread_info structure
- */
-void arch_release_thread_stack(unsigned long *stack)
-{
-	struct thread_info *info = (void *)stack;
-	struct single_step_state *step_state = info->step_state;
-
-	if (step_state) {
-
-		/*
-		 * FIXME: we don't munmap step_state->buffer
-		 * because the mm_struct for this process (info->task->mm)
-		 * has already been zeroed in exit_mm().  Keeping a
-		 * reference to it here seems like a bad move, so this
-		 * means we can't munmap() the buffer, and therefore if we
-		 * ptrace multiple threads in a process, we will slowly
-		 * leak user memory.  (Note that as soon as the last
-		 * thread in a process dies, we will reclaim all user
-		 * memory including single-step buffers in the usual way.)
-		 * We should either assign a kernel VA to this buffer
-		 * somehow, or we should associate the buffer(s) with the
-		 * mm itself so we can clean them up that way.
-		 */
-		kfree(step_state);
-	}
-}
-
 static void save_arch_state(struct thread_struct *t);
 
-int copy_thread(unsigned long clone_flags, unsigned long sp,
-		unsigned long arg, struct task_struct *p)
+int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 {
+	unsigned long clone_flags = args->flags;
+	unsigned long sp = args->stack;
 	struct pt_regs *childregs = task_pt_regs(p);
 	unsigned long ksp;
 	unsigned long *callee_regs;
@@ -130,13 +103,13 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	/* Record the pid of the task that created this one. */
 	p->thread.creator_pid = current->pid;
 
-	if (unlikely(p->flags & PF_KTHREAD)) {
+	if (unlikely(args->fn)) {
 		/* kernel thread */
 		memset(childregs, 0, sizeof(struct pt_regs));
 		memset(&callee_regs[2], 0,
 		       (CALLEE_SAVED_REGS_COUNT - 2) * sizeof(unsigned long));
-		callee_regs[0] = sp;   /* r30 = function */
-		callee_regs[1] = arg;  /* r31 = arg */
+		callee_regs[0] = (unsigned long) args->fn;     /* r30 */
+		callee_regs[1] = (unsigned long) args->fn_arg; /* r31 */
 		p->thread.pc = (unsigned long) ret_from_kernel_thread;
 		return 0;
 	}
@@ -180,7 +153,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	 * which is passed in as arg #5 to sys_clone().
 	 */
 	if (clone_flags & CLONE_SETTLS)
-		childregs->tp = childregs->regs[4];
+		childregs->tp = args->tls;
 
 
 #if CHIP_HAS_TILE_DMA()
@@ -451,7 +424,7 @@ struct task_struct *__sched _switch_to(struct task_struct *prev,
 #endif
 
 	/* Notify the simulator of task exit. */
-	if (unlikely(prev->state == TASK_DEAD))
+	if (unlikely(READ_ONCE(prev->__state) == TASK_DEAD))
 		__insn_mtspr(SPR_SIM_CONTROL, SIM_CONTROL_OS_EXIT |
 			     (prev->pid << _SIM_CONTROL_OPERATOR_BITS));
 
@@ -491,12 +464,12 @@ void prepare_exit_to_usermode(struct pt_regs *regs, u32 thread_info_flags)
 			do_async_page_fault(regs);
 #endif
 
-		if (thread_info_flags & _TIF_SIGPENDING)
+		if (thread_info_flags & (_TIF_SIGPENDING | _TIF_NOTIFY_SIGNAL))
 			do_signal(regs);
 
 		if (thread_info_flags & _TIF_NOTIFY_RESUME) {
 			clear_thread_flag(TIF_NOTIFY_RESUME);
-			tracehook_notify_resume(regs);
+			resume_user_mode_work(regs);
 		}
 
 		local_irq_disable();
@@ -519,12 +492,9 @@ void prepare_exit_to_usermode(struct pt_regs *regs, u32 thread_info_flags)
 	user_enter();
 }
 
-unsigned long get_wchan(struct task_struct *p)
+unsigned long __get_wchan(struct task_struct *p)
 {
 	struct KBacktraceIterator kbt;
-
-	if (!p || p == current || p->state == TASK_RUNNING)
-		return 0;
 
 	for (KBacktraceIterator_init(&kbt, p, NULL);
 	     !KBacktraceIterator_end(&kbt);
@@ -547,6 +517,27 @@ void flush_thread(void)
  */
 void exit_thread(struct task_struct *tsk)
 {
+	struct single_step_state *step_state = task_thread_info(tsk)->step_state;
+
+	if (step_state) {
+		/*
+		 * FIXME: we don't munmap step_state->buffer
+		 * because the mm_struct for this process (tsk->mm)
+		 * has already been zeroed in exit_mm().  Keeping a
+		 * reference to it here seems like a bad move, so this
+		 * means we can't munmap() the buffer, and therefore if we
+		 * ptrace multiple threads in a process, we will slowly
+		 * leak user memory.  (Note that as soon as the last
+		 * thread in a process dies, we will reclaim all user
+		 * memory including single-step buffers in the usual way.)
+		 * We should either assign a kernel VA to this buffer
+		 * somehow, or we should associate the buffer(s) with the
+		 * mm itself so we can clean them up that way.
+		 */
+		task_thread_info(tsk)->step_state = NULL;
+		kfree(step_state);
+	}
+
 #ifdef CONFIG_HARDWALL
 	/*
 	 * Remove the task from the list of tasks that are associated
@@ -651,9 +642,9 @@ void nmi_raise_cpu_backtrace(struct cpumask *in_mask)
 	}
 }
 
-void arch_trigger_cpumask_backtrace(const cpumask_t *mask, bool exclude_self)
+void arch_trigger_cpumask_backtrace(const cpumask_t *mask, int exclude_cpu)
 {
-	nmi_trigger_cpumask_backtrace(mask, exclude_self,
+	nmi_trigger_cpumask_backtrace(mask, exclude_cpu,
 				      nmi_raise_cpu_backtrace);
 }
 #endif /* __tilegx_ */

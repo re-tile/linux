@@ -126,7 +126,7 @@ static struct bin_attribute hvconfig_bin;
 
 static ssize_t
 hvconfig_bin_read(struct file *filp, struct kobject *kobj,
-		  struct bin_attribute *bin_attr,
+		  const struct bin_attribute *bin_attr,
 		  char *buf, loff_t off, size_t count)
 {
 	static size_t size;
@@ -217,15 +217,20 @@ static struct subsys_interface hv_stats_interface = {
 
 static int __init create_sysfs_entries(void)
 {
+	struct device *dev_root;
 	int err = 0;
 
+	dev_root = bus_get_dev_root(&cpu_subsys);
+	if (dev_root) {
 #define create_cpu_attr(name)						\
-	if (!err)							\
-		err = device_create_file(cpu_subsys.dev_root, &dev_attr_##name);
-	create_cpu_attr(chip_width);
-	create_cpu_attr(chip_height);
-	create_cpu_attr(chip_serial);
-	create_cpu_attr(chip_revision);
+		if (!err)						\
+			err = device_create_file(dev_root, &dev_attr_##name);
+		create_cpu_attr(chip_width);
+		create_cpu_attr(chip_height);
+		create_cpu_attr(chip_serial);
+		create_cpu_attr(chip_revision);
+		put_device(dev_root);
+	}
 
 #define create_hv_attr(name)						\
 	if (!err)							\

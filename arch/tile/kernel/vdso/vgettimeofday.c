@@ -44,7 +44,7 @@ struct syscall_return_value {
 /*
  * Find out the vDSO data page address in the process address space.
  */
-inline unsigned long get_datapage(void)
+static inline unsigned long get_datapage(void)
 {
 	unsigned long ret;
 
@@ -61,7 +61,8 @@ static inline u64 vgetsns(struct vdso_data *vdso)
 	return ((get_cycles() - vdso->cycle_last) & vdso->mask) * vdso->mult;
 }
 
-static inline int do_realtime(struct vdso_data *vdso, struct timespec *ts)
+static inline int do_realtime(struct vdso_data *vdso,
+			      struct __kernel_old_timespec *ts)
 {
 	unsigned count;
 	u64 ns;
@@ -80,7 +81,8 @@ static inline int do_realtime(struct vdso_data *vdso, struct timespec *ts)
 	return 0;
 }
 
-static inline int do_monotonic(struct vdso_data *vdso, struct timespec *ts)
+static inline int do_monotonic(struct vdso_data *vdso,
+			       struct __kernel_old_timespec *ts)
 {
 	unsigned count;
 	u64 ns;
@@ -100,7 +102,7 @@ static inline int do_monotonic(struct vdso_data *vdso, struct timespec *ts)
 }
 
 static inline int do_realtime_coarse(struct vdso_data *vdso,
-				     struct timespec *ts)
+				     struct __kernel_old_timespec *ts)
 {
 	unsigned count;
 
@@ -114,7 +116,7 @@ static inline int do_realtime_coarse(struct vdso_data *vdso,
 }
 
 static inline int do_monotonic_coarse(struct vdso_data *vdso,
-				      struct timespec *ts)
+				      struct __kernel_old_timespec *ts)
 {
 	unsigned count;
 
@@ -127,7 +129,9 @@ static inline int do_monotonic_coarse(struct vdso_data *vdso,
 	return 0;
 }
 
-struct syscall_return_value __vdso_gettimeofday(struct timeval *tv,
+struct syscall_return_value __vdso_gettimeofday(struct __kernel_old_timeval *tv,
+						struct timezone *tz);
+struct syscall_return_value __vdso_gettimeofday(struct __kernel_old_timeval *tv,
 						struct timezone *tz)
 {
 	struct syscall_return_value ret = { 0, 0 };
@@ -146,17 +150,18 @@ struct syscall_return_value __vdso_gettimeofday(struct timeval *tv,
 	if (unlikely(tv == NULL))
 		return ret;
 
-	do_realtime(vdso, (struct timespec *)tv);
+	do_realtime(vdso, (struct __kernel_old_timespec *)tv);
 	tv->tv_usec /= 1000;
 
 	return ret;
 }
 
-int gettimeofday(struct timeval *tv, struct timezone *tz)
+struct syscall_return_value gettimeofday(struct __kernel_old_timeval *tv,
+					 struct timezone *tz)
 	__attribute__((weak, alias("__vdso_gettimeofday")));
 
-static struct syscall_return_value vdso_fallback_gettime(long clock,
-							 struct timespec *ts)
+static struct syscall_return_value
+vdso_fallback_gettime(long clock, struct __kernel_old_timespec *ts)
 {
 	struct syscall_return_value ret;
 	__asm__ __volatile__ (
@@ -171,7 +176,9 @@ static struct syscall_return_value vdso_fallback_gettime(long clock,
 }
 
 struct syscall_return_value __vdso_clock_gettime(clockid_t clock,
-						 struct timespec *ts)
+						 struct __kernel_old_timespec *ts);
+struct syscall_return_value __vdso_clock_gettime(clockid_t clock,
+						 struct __kernel_old_timespec *ts)
 {
 	struct vdso_data *vdso = (struct vdso_data *)get_datapage();
 	struct syscall_return_value ret = { 0, 0 };
@@ -194,5 +201,6 @@ struct syscall_return_value __vdso_clock_gettime(clockid_t clock,
 	}
 }
 
-int clock_gettime(clockid_t clock, struct timespec *ts)
+struct syscall_return_value clock_gettime(clockid_t clock,
+					  struct __kernel_old_timespec *ts)
 	__attribute__((weak, alias("__vdso_clock_gettime")));

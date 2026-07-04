@@ -18,6 +18,7 @@
 #include <linux/rwsem.h>
 #include <linux/kprobes.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/hardirq.h>
 #include <linux/uaccess.h>
 #include <linux/smp.h>
@@ -25,6 +26,7 @@
 #include <linux/compat.h>
 #include <asm/hardwall.h>
 #include <asm/traps.h>
+#include <asm/setup.h>
 #include <asm/siginfo.h>
 #include <asm/irq_regs.h>
 
@@ -323,7 +325,6 @@ void __kprobes do_hardwall_trap(struct pt_regs* regs, int fault_num)
 	struct hardwall_info *rect;
 	struct hardwall_type *hwt;
 	struct task_struct *p;
-	struct siginfo info;
 	int cpu = smp_processor_id();
 	int found_processes;
 	struct pt_regs *old_regs = set_irq_regs(regs);
@@ -383,9 +384,6 @@ void __kprobes do_hardwall_trap(struct pt_regs* regs, int fault_num)
 	wmb(); /* Ensure visibility of rectangle before notifying processes. */
 	pr_notice("cpu %d: detected %s hardwall violation %#lx...\n",
 		  cpu, hwt->name, (long)mfspr_XDN(hwt, DIRECTION_PROTECT));
-	info.si_signo = SIGILL;
-	info.si_errno = 0;
-	info.si_code = ILL_HARDWALL;
 	found_processes = 0;
 	list_for_each_entry(p, &rect->task_head,
 			    thread.hardwall[hwt->index].list) {
@@ -393,7 +391,7 @@ void __kprobes do_hardwall_trap(struct pt_regs* regs, int fault_num)
 		if (!(p->flags & PF_EXITING)) {
 			found_processes = 1;
 			pr_notice("hardwall: killing %d\n", p->pid);
-			do_send_sig_info(info.si_signo, &info, p, false);
+			send_sig_fault(SIGILL, ILL_HARDWALL, NULL, p);
 		}
 	}
 	if (!found_processes)
@@ -416,7 +414,7 @@ void __kprobes do_hardwall_trap(struct pt_regs* regs, int fault_num)
 }
 
 /* Allow access from user space to the user network. */
-void grant_hardwall_mpls(struct hardwall_type *hwt)
+static void grant_hardwall_mpls(struct hardwall_type *hwt)
 {
 #ifndef __tilepro__
 	if (!hwt->is_xdn) {
@@ -435,7 +433,7 @@ void grant_hardwall_mpls(struct hardwall_type *hwt)
 }
 
 /* Deny access from user space to the user network. */
-void restrict_hardwall_mpls(struct hardwall_type *hwt)
+static void restrict_hardwall_mpls(struct hardwall_type *hwt)
 {
 #ifndef __tilepro__
 	if (!hwt->is_xdn) {
@@ -590,12 +588,12 @@ static int hardwall_activate(struct hardwall_info *info)
 	 * Get our affinity; if we're not bound to this tile uniquely,
 	 * we can't access the network registers.
 	 */
-	if (cpumask_weight(&p->cpus_allowed) != 1)
+	if (cpumask_weight(&p->cpus_mask) != 1)
 		return -EPERM;
 
 	/* Make sure we are bound to a cpu assigned to this resource. */
 	cpu = smp_processor_id();
-	BUG_ON(cpumask_first(&p->cpus_allowed) != cpu);
+	BUG_ON(cpumask_first(&p->cpus_mask) != cpu);
 	if (!cpumask_test_cpu(cpu, &info->cpumask))
 		return -EINVAL;
 
@@ -621,17 +619,17 @@ static int hardwall_activate(struct hardwall_info *info)
  * Deactivate a task's hardwall.  Must hold lock for hardwall_type.
  * This method may be called from exit_thread(), so we don't want to
  * rely on too many fields of struct task_struct still being valid.
- * We assume the cpus_allowed, pid, and comm fields are still valid.
+ * We assume the cpus_mask, pid, and comm fields are still valid.
  */
 static void _hardwall_deactivate(struct hardwall_type *hwt,
 				 struct task_struct *task)
 {
 	struct thread_struct *ts = &task->thread;
 
-	if (cpumask_weight(&task->cpus_allowed) != 1) {
+	if (cpumask_weight(&task->cpus_mask) != 1) {
 		pr_err("pid %d (%s) releasing %s hardwall with an affinity mask containing %d cpus!\n",
 		       task->pid, task->comm, hwt->name,
-		       cpumask_weight(&task->cpus_allowed));
+		       cpumask_weight(&task->cpus_mask));
 		BUG();
 	}
 
@@ -914,25 +912,12 @@ static int hardwall_proc_show(struct seq_file *sf, void *v)
 	return 0;
 }
 
-static int hardwall_proc_open(struct inode *inode,
-			      struct file *file)
-{
-	return single_open(file, hardwall_proc_show, PDE_DATA(inode));
-}
-
-static const struct file_operations hardwall_proc_fops = {
-	.open		= hardwall_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-
 static void hardwall_add_proc(struct hardwall_info *info)
 {
 	char buf[64];
 	snprintf(buf, sizeof(buf), "%d", info->id);
-	proc_create_data(buf, 0444, info->type->proc_dir,
-			 &hardwall_proc_fops, info);
+	proc_create_single_data(buf, 0444, info->type->proc_dir,
+				hardwall_proc_show, info);
 }
 
 static void hardwall_remove_proc(struct hardwall_info *info)

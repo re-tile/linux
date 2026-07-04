@@ -1,3 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-only
 vdso.lds
 vdso32.lds
+vdso.so.dbg.tmp

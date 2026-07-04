@@ -237,7 +237,7 @@ void KBacktraceIterator_init(struct KBacktraceIterator *kbt,
 		validate_stack(regs);
 
 	if (regs == NULL) {
-		if (is_current || t->state == TASK_RUNNING) {
+		if (is_current || task_is_running(t)) {
 			/* Can't do this; we need registers */
 			kbt->end = KBT_RUNNING;
 			return;
@@ -398,7 +398,7 @@ void tile_show_stack(struct KBacktraceIterator *kbt)
 		if (kbt->task == current && address < PAGE_OFFSET &&
 		    !have_mmap_sem && kbt->task->mm && !in_interrupt()) {
 			have_mmap_sem =
-				down_read_trylock(&kbt->task->mm->mmap_sem);
+				mmap_read_trylock(kbt->task->mm);
 		}
 
 		describe_addr(kbt, address, have_mmap_sem,
@@ -415,7 +415,7 @@ void tile_show_stack(struct KBacktraceIterator *kbt)
 	if (kbt->end == KBT_LOOP)
 		pr_err("Stack dump stopped; next frame identical to this one\n");
 	if (have_mmap_sem)
-		up_read(&kbt->task->mm->mmap_sem);
+		mmap_read_unlock(kbt->task->mm);
 	end_backtrace();
 }
 EXPORT_SYMBOL(tile_show_stack);
@@ -455,7 +455,8 @@ void _KBacktraceIterator_init_current(struct KBacktraceIterator *kbt, ulong pc,
  * Called from sched_show_task() with task != NULL, or dump_stack()
  * with task == NULL.  The esp argument is always NULL.
  */
-void show_stack(struct task_struct *task, unsigned long *esp)
+void show_stack(struct task_struct *task, unsigned long *esp,
+		const char *loglvl)
 {
 	struct KBacktraceIterator kbt;
 	if (task == NULL || task == current) {

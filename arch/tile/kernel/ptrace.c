@@ -21,7 +21,6 @@
 #include <linux/uaccess.h>
 #include <linux/regset.h>
 #include <linux/elf.h>
-#include <linux/tracehook.h>
 #include <linux/context_tracking.h>
 #include <linux/sched/task_stack.h>
 
@@ -96,15 +95,13 @@ enum tile_regset {
 
 static int tile_gpr_get(struct task_struct *target,
 			  const struct user_regset *regset,
-			  unsigned int pos, unsigned int count,
-			  void *kbuf, void __user *ubuf)
+			  struct membuf to)
 {
 	struct pt_regs regs;
 
 	getregs(target, &regs);
 
-	return user_regset_copyout(&pos, &count, &kbuf, &ubuf, &regs, 0,
-				   sizeof(regs));
+	return membuf_write(&to, &regs, sizeof(regs));
 }
 
 static int tile_gpr_set(struct task_struct *target,
@@ -131,7 +128,7 @@ static const struct user_regset tile_user_regset[] = {
 		.n = ELF_NGREG,
 		.size = sizeof(elf_greg_t),
 		.align = sizeof(elf_greg_t),
-		.get = tile_gpr_get,
+		.regset_get = tile_gpr_get,
 		.set = tile_gpr_set,
 	},
 };
@@ -258,12 +255,12 @@ int do_syscall_trace_enter(struct pt_regs *regs)
 	u32 work = READ_ONCE(current_thread_info()->flags);
 
 	if ((work & _TIF_SYSCALL_TRACE) &&
-	    tracehook_report_syscall_entry(regs)) {
+	    ptrace_report_syscall_entry(regs)) {
 		regs->regs[TREG_SYSCALL_NR] = -1;
 		return -1;
 	}
 
-	if (secure_computing(NULL) == -1)
+	if (secure_computing() == -1)
 		return -1;
 
 	if (work & _TIF_SYSCALL_TRACEPOINT)
@@ -290,7 +287,7 @@ void do_syscall_trace_exit(struct pt_regs *regs)
 		regs->regs[1] = 0;
 
 	if (test_thread_flag(TIF_SYSCALL_TRACE))
-		tracehook_report_syscall_exit(regs, 0);
+		ptrace_report_syscall_exit(regs, 0);
 
 	if (test_thread_flag(TIF_SYSCALL_TRACEPOINT))
 		trace_sys_exit(regs, regs->regs[0]);
@@ -298,15 +295,9 @@ void do_syscall_trace_exit(struct pt_regs *regs)
 
 void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs)
 {
-	struct siginfo info;
-
-	memset(&info, 0, sizeof(info));
-	info.si_signo = SIGTRAP;
-	info.si_code  = TRAP_BRKPT;
-	info.si_addr  = (void __user *) regs->pc;
-
 	/* Send us the fakey SIGTRAP */
-	force_sig_info(SIGTRAP, &info, tsk);
+	force_sig_fault_to_task(SIGTRAP, TRAP_BRKPT,
+				(void __user *) regs->pc, tsk);
 }
 
 /* Handle synthetic interrupt delivered only by the simulator. */
