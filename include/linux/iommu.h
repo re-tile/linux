@@ -34,6 +34,7 @@
 
 struct iommu_ops;
 struct iommu_group;
+struct pci_dev;
 struct bus_type;
 struct device;
 struct iommu_domain;

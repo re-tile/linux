@@ -20,6 +20,8 @@ enum tph_mem_type {
 	TPH_MEM_TYPE_PM		/* persistent memory */
 };
 
+struct pci_dev;
+
 #ifdef CONFIG_PCIE_TPH
 int pcie_tph_set_st_entry(struct pci_dev *pdev,
 			  unsigned int index, u16 tag);
