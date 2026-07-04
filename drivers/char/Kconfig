@@ -132,6 +132,15 @@ config POWERNV_OP_PANEL
 
 	  If unsure, say M here to build it as a module called powernv-op-panel.
 
+config TILE_TMFIFO
+	tristate "Character-device access to the Tilera tile-monitor FIFO"
+	depends on TILEGX
+	default y
+	help
+	  This device supports communication with an external controller
+	  via the tile-monitor FIFO hardware, typically as /dev/tmfifo/0.
+	  The tile-side shepherd agent used by tile-monitor requires it.
+
 source "drivers/char/ipmi/Kconfig"
 
 config DS1620
