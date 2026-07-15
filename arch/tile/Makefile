@@ -24,6 +24,13 @@ CHECKFLAGS	+= -m$(BITS)
 libs-y		+= arch/tile/lib/
 libs-y		+= $(LIBGCC_PATH)
 
+# There is no boot wrapper on tile since the hypervisor loads the ELF
+# vmlinux directly, so install copies the raw artifacts like mips does.
+install:
+	$(Q)install -D -m 755 vmlinux $(INSTALL_PATH)/vmlinux-$(KERNELRELEASE)
+	$(Q)install -D -m 644 .config $(INSTALL_PATH)/config-$(KERNELRELEASE)
+	$(Q)install -D -m 644 System.map $(INSTALL_PATH)/System.map-$(KERNELRELEASE)
+
 define archhelp
 	echo '  vmlinux         - the ELF image the Tilera hypervisor loads directly'
 endef
