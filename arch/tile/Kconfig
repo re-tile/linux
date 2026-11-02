@@ -9,9 +9,15 @@
 config TILE
 	def_bool y
 	select ARCH_HAS_DEVMEM_IS_ALLOWED
+	select ARCH_HAS_DMA_ALLOC
+	select ARCH_HAS_DMA_SET_MASK if PCI
+	select ARCH_HAS_PHYS_TO_DMA
+	select ARCH_HAS_SYNC_DMA_FOR_CPU
+	select ARCH_HAS_SYNC_DMA_FOR_DEVICE
 	select ARCH_HAVE_NMI_SAFE_CMPXCHG
 	select ARCH_WANT_FRAME_POINTERS
 	select EDAC_SUPPORT
+	select GENERIC_PCI_IOMAP if PCI
 	select GENERIC_IRQ_PROBE
 	select GENERIC_IRQ_SHOW
 	select GENERIC_PENDING_IRQ if SMP
@@ -24,14 +30,18 @@ config TILE
 	select HAVE_DEBUG_STACKOVERFLOW
 	select HAVE_EXIT_THREAD
 	select HAVE_NMI if USE_PMC
+	select HAVE_PCI
 	select HAVE_PERF_EVENTS
 	select HAVE_SYSCALL_TRACEPOINTS
 	select KALLSYMS_ABSOLUTE if KALLSYMS
 	select MODULES_USE_ELF_RELA
 	select NEED_SG_DMA_LENGTH
+	select PCI_DOMAINS if PCI
+	select PCI_MSI_ARCH_FALLBACKS if PCI_MSI
 	select SWIOTLB
 	select SYSCTL_EXCEPTION_TRACE
 	select SYS_HYPERVISOR
+	select TILE_GXIO_TRIO if PCI
 	select USER_STACKTRACE_SUPPORT
 	select USE_PMC if PERF_EVENTS
 	select HAVE_PAGE_SIZE_16KB
@@ -221,9 +231,17 @@ endmenu  # Tilera-specific configuration
 menu "Bus options"
 
 config NO_IOMEM
-	def_bool y
+	def_bool !PCI
 
 config NO_IOPORT_MAP
-	def_bool y
+	def_bool !TILE_PCI_IO
+
+config TILE_PCI_IO
+	bool "PCI I/O space support"
+	depends on PCI
+	help
+	  Enable PCI I/O space support on TILE-Gx. Since the PCI I/O space
+	  is used by few modern PCIe endpoint devices, its support is disabled
+	  by default to save the TRIO PIO Region resource for other purposes.
 
 endmenu

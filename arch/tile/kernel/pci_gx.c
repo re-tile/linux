@@ -39,6 +39,10 @@
 
 #include <arch/sim.h>
 
+/* Per-controller memory ranges discovered in setup.c. */
+extern unsigned long node_start_pfn[NR_PA_HIGHBIT_VALUES];
+extern unsigned long node_end_pfn[NR_PA_HIGHBIT_VALUES];
+
 /*
  * This file contains the routines to search for PCI buses,
  * enumerate the buses, and configure any attached devices.
@@ -340,7 +344,7 @@ static int tile_init_irqs(struct pci_controller *controller)
 		int cpu;
 
 		/* Ask the kernel to allocate an IRQ. */
-		irq = irq_alloc_hwirq(-1);
+		irq = tile_irq_alloc();
 		if (!irq) {
 			pr_err("PCI: no free irq vectors, failed for %d\n", i);
 			goto free_irqs;
@@ -371,7 +375,7 @@ static int tile_init_irqs(struct pci_controller *controller)
 
 free_irqs:
 	for (j = 0; j < i; j++)
-		irq_free_hwirq(controller->irq_intx_table[j]);
+		tile_irq_free(controller->irq_intx_table[j]);
 
 	return -1;
 }
@@ -981,10 +985,13 @@ int __init pcibios_init(void)
 		 * that Linux can map all of its PA space to the PCI bus.
 		 * Use the IOMMU to handle hash-for-home memory.
 		 */
-		for_each_online_node(j) {
+		for (j = 0; j < NR_PA_HIGHBIT_VALUES; j++) {
 			unsigned long start_pfn = node_start_pfn[j];
 			unsigned long end_pfn = node_end_pfn[j];
 			unsigned long nr_pages = end_pfn - start_pfn;
+
+			if (end_pfn <= start_pfn)
+				continue;
 
 			ret = gxio_trio_alloc_memory_maps(trio_context, 1, 0,
 							  0);
@@ -1051,22 +1058,14 @@ char *__init pcibios_setup(char *str)
 }
 
 /*
- * Called for each device after PCI setup is done.
- * We initialize the PCI device capabilities conservatively, assuming that
- * all devices can only address the 32-bit DMA space. The exception here is
- * that the device dma_offset is set to the value that matches the 64-bit
- * capable devices. This is OK because dma_offset is not used by legacy
- * dma_ops, nor by the hybrid dma_ops's streaming DMAs, which are 64-bit ops.
- * This implementation matches the kernel design of setting PCI devices'
- * coherent_dma_mask to 0xffffffffull by default, allowing the device drivers
- * to skip calling pci_set_consistent_dma_mask(DMA_BIT_MASK(32)).
+ * Called for each device after PCI setup is done.  Every device starts in
+ * the legacy 32-bit window; arch_dma_set_mask() moves it to the 64-bit
+ * Mem-Map once the driver raises its mask.
  */
 static void pcibios_fixup_final(struct pci_dev *pdev)
 {
-	set_dma_ops(&pdev->dev, gx_legacy_pci_dma_map_ops);
-	set_dma_offset(&pdev->dev, TILE_PCI_MEM_MAP_BASE_OFFSET);
-	pdev->dev.archdata.max_direct_dma_addr =
-		TILE_PCI_MAX_DIRECT_DMA_ADDRESS;
+	pdev->dev.archdata.dma_offset = 0;
+	pdev->dev.bus_dma_limit = TILE_PCI_MAX_DIRECT_DMA_ADDRESS;
 	pdev->dev.coherent_dma_mask = TILE_PCI_MAX_DIRECT_DMA_ADDRESS;
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_ANY_ID, PCI_ANY_ID, pcibios_fixup_final);
@@ -1486,7 +1485,7 @@ int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
 	int irq;
 	int ret;
 
-	irq = irq_alloc_hwirq(-1);
+	irq = tile_irq_alloc();
 	if (!irq)
 		return -ENOSPC;
 
@@ -1496,14 +1495,14 @@ int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
 	 * These devices will fall back to using the legacy interrupts.
 	 * Most PCIe endpoint devices do support 64-bit message addressing.
 	 */
-	if (desc->msi_attrib.is_64 == 0) {
+	if (desc->pci.msi_attrib.is_64 == 0) {
 		dev_info(&pdev->dev, "64-bit MSI message address not supported, falling back to legacy interrupts\n");
 
 		ret = -ENOMEM;
 		goto is_64_failure;
 	}
 
-	default_irq = desc->msi_attrib.default_irq;
+	default_irq = desc->pci.msi_attrib.default_irq;
 	controller = irq_get_handler_data(default_irq);
 
 	BUG_ON(!controller);
@@ -1535,7 +1534,7 @@ int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
 		mem_map = gxio_trio_alloc_memory_maps(trio_context, 1, 0, 0);
 		if (mem_map < 0) {
 			dev_info(&pdev->dev, "%s Mem-Map alloc failure - failed to initialize MSI interrupts - falling back to legacy interrupts\n",
-				 desc->msi_attrib.is_msix ? "MSI-X" : "MSI");
+				 desc->pci.msi_attrib.is_msix ? "MSI-X" : "MSI");
 			ret = -ENOMEM;
 			goto msi_mem_map_alloc_failure;
 		}
@@ -1582,11 +1581,11 @@ hv_msi_config_failure:
 	/* Free mem-map */
 msi_mem_map_alloc_failure:
 is_64_failure:
-	irq_free_hwirq(irq);
+	tile_irq_free(irq);
 	return ret;
 }
 
 void arch_teardown_msi_irq(unsigned int irq)
 {
-	irq_free_hwirq(irq);
+	tile_irq_free(irq);
 }

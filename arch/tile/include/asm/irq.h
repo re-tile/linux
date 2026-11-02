@@ -76,6 +76,9 @@ enum {
  */
 void tile_irq_activate(unsigned int irq, int tile_irq_type);
 
+unsigned int tile_irq_alloc(void);
+void tile_irq_free(unsigned int irq);
+
 void setup_irq_regs(void);
 
 #ifdef __tilegx__

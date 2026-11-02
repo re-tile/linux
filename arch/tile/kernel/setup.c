@@ -1352,7 +1352,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 
 #ifdef CONFIG_SWIOTLB
-	swiotlb_init(false, SWIOTLB_VERBOSE);
+	swiotlb_init(IS_ENABLED(CONFIG_PCI), SWIOTLB_VERBOSE);
 #endif
 
 	paging_init();

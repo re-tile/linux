@@ -247,6 +247,29 @@ void tile_irq_activate(unsigned int irq, int tile_irq_type)
 }
 EXPORT_SYMBOL(tile_irq_activate);
 
+/* Returns 0 on failure, since irq 0 is always IRQ_RESCHEDULE. */
+unsigned int tile_irq_alloc(void)
+{
+	int irq = irq_alloc_desc_from(NR_IRQS_LEGACY, -1);
+
+	if (irq < 0)
+		return 0;
+
+	if (irq >= NR_IRQS) {
+		irq_free_desc(irq);
+		return 0;
+	}
+
+	return irq;
+}
+EXPORT_SYMBOL(tile_irq_alloc);
+
+void tile_irq_free(unsigned int irq)
+{
+	irq_free_desc(irq);
+}
+EXPORT_SYMBOL(tile_irq_free);
+
 
 void ack_bad_irq(unsigned int irq)
 {

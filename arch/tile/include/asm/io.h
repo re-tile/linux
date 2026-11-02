@@ -49,6 +49,12 @@ extern void iounmap(volatile void __iomem *addr);
 #define ioremap_uc(physaddr, size)		ioremap(physaddr, size)
 #define ioremap_fullcache(physaddr, size)	ioremap(physaddr, size)
 
+#define ioremap_np ioremap_np
+static inline void __iomem *ioremap_np(phys_addr_t offset, size_t size)
+{
+	return NULL;
+}
+
 #define mmiowb()
 
 /* Conversion between virtual and physical mappings.  */
