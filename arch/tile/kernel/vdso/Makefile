@@ -42,7 +42,7 @@ $(obj)/vdso.o: $(obj)/vdso.so
 
 # link rule for the .so file, .lds has to be first
 SYSCFLAGS_vdso.so.dbg = $(c_flags)
-$(obj)/vdso.so.dbg: $(src)/vdso.lds $(obj-vdso) FORCE
+$(obj)/vdso.so.dbg: $(obj)/vdso.lds $(obj-vdso) FORCE
 	$(call if_changed,vdsold)
 
 # We also create a special relocatable object that should mirror the symbol
@@ -52,7 +52,7 @@ $(obj)/vdso.so.dbg: $(src)/vdso.lds $(obj-vdso) FORCE
 SYSCFLAGS_vdso.so.dbg = -shared -s -Wl,-soname=linux-vdso.so.1 \
                             -Wl,--hash-style=both
 SYSCFLAGS_vdso_dummy.o = -r
-$(obj)/vdso-dummy.o: $(src)/vdso.lds $(obj)/vrt_sigreturn.o FORCE
+$(obj)/vdso-dummy.o: $(obj)/vdso.lds $(obj)/vrt_sigreturn.o FORCE
 	$(call if_changed,vdsold)
 
 # binutils >= 2.41 aborts on `ld -r`/`--just-symbols` against the dynamic
@@ -118,5 +118,5 @@ $(obj)/vdso32.o: $(obj)/vdso32.so
 
 SYSCFLAGS_vdso32.so.dbg = -m32 -shared -s -Wl,-soname=linux-vdso32.so.1 \
 			    -Wl,--hash-style=both
-$(obj)/vdso32.so.dbg: $(src)/vdso.lds $(obj-vdso32) FORCE
+$(obj)/vdso32.so.dbg: $(obj)/vdso.lds $(obj-vdso32) FORCE
 	$(call if_changed,vdsold)
