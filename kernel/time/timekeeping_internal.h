@@ -58,12 +58,17 @@ extern void vdso_time_update_aux(struct timekeeper *tk);
 
 #else
 
+#ifdef CONFIG_GENERIC_TIME_VSYSCALL
+extern void update_vsyscall(struct timekeeper *tk);
+extern void update_vsyscall_tz(void);
+#else
 static inline void update_vsyscall(struct timekeeper *tk)
 {
 }
 static inline void update_vsyscall_tz(void)
 {
 }
+#endif
 static inline void vdso_time_update_aux(struct timekeeper *tk)
 {
 }

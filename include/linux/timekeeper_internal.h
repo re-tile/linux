@@ -193,4 +193,10 @@ struct timekeeper {
 	s32			tai_offset;
 };
 
+/* Arch vDSO updaters for the pre-GENERIC_GETTIMEOFDAY interface. */
+#ifdef CONFIG_GENERIC_TIME_VSYSCALL
+extern void update_vsyscall(struct timekeeper *tk);
+extern void update_vsyscall_tz(void);
+#endif
+
 #endif /* _LINUX_TIMEKEEPER_INTERNAL_H */
