@@ -3,8 +3,8 @@
 # see Documentation/kbuild/kconfig-language.rst.
 #
 # Forward-port note: TILEPro support was dropped in this port (TILE-Gx only,
-# matching the GCC/glibc revival). PCI (TRIO), USB, mPIPE networking, KVM,
-# NUMA/discontigmem, and kexec are deferred from the first-compile scope.
+# matching the GCC/glibc revival). KVM, NUMA/discontigmem, and kexec are
+# deferred from the first-compile scope.
 
 config TILE
 	def_bool y
@@ -235,6 +235,15 @@ config NO_IOMEM
 
 config NO_IOPORT_MAP
 	def_bool !TILE_PCI_IO
+
+config TILE_USB
+	bool "Tilera USB host adapter support"
+	default y
+	depends on USB
+	select TILE_GXIO_USB_HOST
+	help
+	  Provides USB host adapter support for the built-in EHCI and OHCI
+	  interfaces on TILE-Gx chips.
 
 config TILE_PCI_IO
 	bool "PCI I/O space support"

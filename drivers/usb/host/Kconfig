@@ -340,6 +340,13 @@ config USB_OCTEON_HCD
 	  To compile this driver as a module, choose M here. The module
 	  will be called octeon-hcd.
 
+config USB_EHCI_TILEGX
+	tristate "TILE-Gx on-chip EHCI support"
+	depends on TILE_USB
+	default y
+	help
+	  Enable support for the EHCI controllers on TILE-Gx chips.
+
 config USB_EHCI_HCD_PLATFORM
 	tristate "Generic EHCI driver for a platform device"
 	help
@@ -553,6 +560,13 @@ config USB_OHCI_EXYNOS
 	help
 	  Enable support for the Samsung S5Pv210 and Exynos SOC's on-chip OHCI
 	  controller.
+
+config USB_OHCI_TILEGX
+	tristate "TILE-Gx on-chip OHCI support"
+	depends on TILE_USB
+	default y
+	help
+	  Enable support for the OHCI controllers on TILE-Gx chips.
 
 config USB_OHCI_HCD_PLATFORM
 	tristate "Generic OHCI driver for a platform device"
