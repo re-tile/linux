@@ -20,6 +20,7 @@
 #include <linux/compat.h>
 #include <linux/uaccess.h>
 #include <linux/regset.h>
+#include <linux/seccomp.h>
 #include <linux/elf.h>
 #include <linux/context_tracking.h>
 #include <linux/sched/task_stack.h>
@@ -255,12 +256,12 @@ int do_syscall_trace_enter(struct pt_regs *regs)
 	u32 work = READ_ONCE(current_thread_info()->flags);
 
 	if ((work & _TIF_SYSCALL_TRACE) &&
-	    ptrace_report_syscall_entry(regs)) {
+	    !ptrace_report_syscall_permit_entry(regs)) {
 		regs->regs[TREG_SYSCALL_NR] = -1;
 		return -1;
 	}
 
-	if (secure_computing() == -1)
+	if (!seccomp_permit_syscall())
 		return -1;
 
 	if (work & _TIF_SYSCALL_TRACEPOINT)

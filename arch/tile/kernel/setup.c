@@ -944,7 +944,7 @@ static int __init setup_initramfs_file(char *str)
 {
 	if (str == NULL)
 		return -EINVAL;
-	strncpy(initramfs_file, str, sizeof(initramfs_file) - 1);
+	strscpy(initramfs_file, str);
 	set_initramfs_file = 1;
 
 	return 0;

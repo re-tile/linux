@@ -365,7 +365,7 @@ void homecache_change_page_home(struct page *page, int order, int home)
 
 	BUG_ON(PageHighMem(page));
 	BUG_ON(page_count(page) > 1);
-	BUG_ON(page_mapped(page));
+	BUG_ON(folio_mapped(page_folio(page)));
 	kva = (unsigned long) page_address(page);
 	flush_remote(0, HV_FLUSH_EVICT_L2, &cpu_cacheable_map,
 		     kva, pages * PAGE_SIZE, PAGE_SIZE, cpu_online_mask,
