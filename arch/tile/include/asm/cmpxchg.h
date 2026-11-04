@@ -20,6 +20,7 @@
 
 #ifndef __ASSEMBLY__
 
+#include <linux/cmpxchg-emu.h>
 #include <asm/barrier.h>
 
 /* Nonexistent functions intended to cause compile errors. */
@@ -53,15 +54,23 @@ extern void __cmpxchg_called_with_bad_pointer(void)
 #define arch_cmpxchg(ptr, o, n)						\
 	({								\
 		typeof(*(ptr)) __x;					\
-		__insn_mtspr(SPR_CMPEXCH_VALUE, (unsigned long)(o));	\
 		smp_mb();						\
 		switch (sizeof(*(ptr))) {				\
+		case 1:							\
+			__x = (typeof(__x))cmpxchg_emu_u8(		\
+				(volatile u8 *)(ptr),			\
+				(uintptr_t)(o), (uintptr_t)(n));	\
+			break;						\
 		case 4:							\
+			__insn_mtspr(SPR_CMPEXCH_VALUE,			\
+				     (unsigned long)(o));		\
 			__x = (typeof(__x))(unsigned long)		\
 				__insn_cmpexch4((ptr),			\
 					(u32)(unsigned long)(n));	\
 			break;						\
 		case 8:							\
+			__insn_mtspr(SPR_CMPEXCH_VALUE,			\
+				     (unsigned long)(o));		\
 			__x = (typeof(__x))__insn_cmpexch((ptr),	\
 						(long long)(n));	\
 			break;						\
