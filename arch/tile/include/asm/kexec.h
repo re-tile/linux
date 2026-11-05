@@ -46,10 +46,6 @@
  */
 #define KEXEC_ARCH KEXEC_ARCH_DEFAULT
 
-/* Use the tile override for the page allocator. */
-struct page *kimage_alloc_pages_arch(gfp_t gfp_mask, unsigned int order);
-#define kimage_alloc_pages_arch kimage_alloc_pages_arch
-
 #define MAX_NOTE_BYTES 1024
 
 /* Defined in arch/tile/kernel/relocate_kernel.S */

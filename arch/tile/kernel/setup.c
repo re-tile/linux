@@ -673,11 +673,6 @@ static void __init setup_bootmem_allocator(void)
 		}
 	}
 #endif
-
-#ifdef CONFIG_KEXEC
-	if (crashk_res.start != crashk_res.end)
-		memblock_reserve(crashk_res.start, resource_size(&crashk_res));
-#endif
 }
 
 static int __init percpu_size(void)
@@ -1535,10 +1530,6 @@ static int __init request_standard_resources(void)
 		insert_ram_resource(PFN_DOWN(m->addr),
 				    PFN_UP(m->addr + m->size - 1), 1);
 	}
-
-#ifdef CONFIG_KEXEC
-	insert_resource(&iomem_resource, &crashk_res);
-#endif
 
 	return 0;
 }

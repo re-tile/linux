@@ -6,6 +6,9 @@
 # matching the GCC/glibc revival). KVM, NUMA/discontigmem, and kexec are
 # deferred from the first-compile scope.
 
+config ARCH_SUPPORTS_KEXEC
+	def_bool y
+
 config TILE
 	def_bool y
 	select ARCH_HAS_DEVMEM_IS_ALLOWED

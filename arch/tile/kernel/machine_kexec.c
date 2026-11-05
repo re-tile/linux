@@ -206,19 +206,6 @@ static void kexec_find_and_set_command_line(struct kimage *image)
 }
 
 /*
- * The kexec code range-checks all its PAs, so to avoid having it run
- * amok and allocate memory and then sequester it from every other
- * controller, we force it to come from controller zero.  We also
- * disable the oom-killer since if we do end up running out of memory,
- * that almost certainly won't help.
- */
-struct page *kimage_alloc_pages_arch(gfp_t gfp_mask, unsigned int order)
-{
-	gfp_mask |= __GFP_THISNODE | __GFP_NORETRY;
-	return alloc_pages_node(0, gfp_mask, order);
-}
-
-/*
  * Address range in which pa=va mapping is set in setup_quasi_va_is_pa().
  * For tilepro, PAGE_OFFSET is used since this is the largest possbile value
  * for tilepro, while for tilegx, we limit it to entire middle level page
@@ -251,7 +238,7 @@ static void setup_quasi_va_is_pa(void)
 	for (i = 0; i < (QUASI_VA_IS_PA_ADDR_RANGE >> HPAGE_SHIFT); i++) {
 		unsigned long vaddr = i << HPAGE_SHIFT;
 		pgd_t *pgd = pgd_offset(current->mm, vaddr);
-		pud_t *pud = pud_offset(pgd, vaddr);
+		pud_t *pud = pud_offset(p4d_offset(pgd, vaddr), vaddr);
 		pte_t *ptep = (pte_t *) pmd_offset(pud, vaddr);
 		unsigned long pfn = i << (HPAGE_SHIFT - PAGE_SHIFT);
 

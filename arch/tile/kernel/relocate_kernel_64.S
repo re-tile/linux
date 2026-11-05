@@ -259,5 +259,6 @@ STD_ENTRY(relocate_new_kernel)
 	.section .rodata,"a"
 
 	.globl relocate_new_kernel_size
+	.align 8
 relocate_new_kernel_size:
-	.long .Lend_relocate_new_kernel - relocate_new_kernel
+	.quad .Lend_relocate_new_kernel - relocate_new_kernel
