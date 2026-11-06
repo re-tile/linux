@@ -582,3 +582,15 @@ int gxio_mpipe_link_set_attr(gxio_mpipe_link_t *link, uint32_t attr,
 }
 
 EXPORT_SYMBOL_GPL(gxio_mpipe_link_set_attr);
+
+int64_t gxio_mpipe_link_get_attr(gxio_mpipe_link_t *link, uint32_t attr)
+{
+	int64_t data;
+	int rv = gxio_mpipe_link_get_attr_aux(link->context,
+					       (link->mac << 24) | (attr & 0xFFFFFF),
+					       &data);
+
+	return rv < 0 ? rv : data;
+}
+
+EXPORT_SYMBOL_GPL(gxio_mpipe_link_get_attr);

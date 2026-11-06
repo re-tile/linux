@@ -45,6 +45,7 @@
 #define GXIO_MPIPE_OP_LINK_OPEN_AUX    IORPC_OPCODE(IORPC_FORMAT_NONE, 0x1211)
 #define GXIO_MPIPE_OP_LINK_CLOSE_AUX   IORPC_OPCODE(IORPC_FORMAT_NONE, 0x1212)
 #define GXIO_MPIPE_OP_LINK_SET_ATTR_AUX IORPC_OPCODE(IORPC_FORMAT_NONE, 0x1213)
+#define GXIO_MPIPE_OP_LINK_GET_ATTR_AUX IORPC_OPCODE(IORPC_FORMAT_NONE, 0x1214)
 
 #define GXIO_MPIPE_OP_GET_TIMESTAMP_AUX IORPC_OPCODE(IORPC_FORMAT_NONE, 0x121e)
 #define GXIO_MPIPE_OP_SET_TIMESTAMP_AUX IORPC_OPCODE(IORPC_FORMAT_NONE, 0x121f)
@@ -116,6 +117,9 @@ int gxio_mpipe_link_open_aux(gxio_mpipe_context_t *context,
 			     _gxio_mpipe_link_name_t name, unsigned int flags);
 
 int gxio_mpipe_link_close_aux(gxio_mpipe_context_t *context, int mac);
+
+int gxio_mpipe_link_get_attr_aux(gxio_mpipe_context_t *context,
+				 unsigned int off, int64_t *data);
 
 int gxio_mpipe_link_set_attr_aux(gxio_mpipe_context_t *context, int mac,
 				 uint32_t attr, int64_t val);

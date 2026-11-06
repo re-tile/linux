@@ -37,6 +37,7 @@
 #include <linux/ctype.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/platform_device.h>
 #include <linux/tcp.h>
 #include <linux/net_tstamp.h>
 #include <linux/ptp_clock_kernel.h>
@@ -44,6 +45,7 @@
 
 #include <asm/checksum.h>
 #include <asm/homecache.h>
+#include <gxio/iorpc_mpipe.h>
 #include <gxio/mpipe.h>
 #include <arch/sim.h>
 
@@ -193,6 +195,8 @@ struct tile_net_priv {
 	int instance;
 	/* The timestamp config. */
 	struct kernel_hwtstamp_config stamp_cfg;
+	/* Polls the hypervisor link state, which has no interrupt here. */
+	struct delayed_work link_work;
 };
 
 static struct mpipe_data {
@@ -428,8 +432,9 @@ static void tile_net_provide_needed_buffers(void)
 {
 	struct tile_net_info *info = this_cpu_ptr(&per_cpu_info);
 	int instance, kind;
-	for (instance = 0; instance < NR_MPIPE_MAX &&
-		     info->mpipe[instance].has_iqueue; instance++)	{
+	for (instance = 0; instance < NR_MPIPE_MAX; instance++) {
+		if (!info->mpipe[instance].has_iqueue)
+			continue;
 		for (kind = 0; kind < MAX_KINDS; kind++) {
 			while (info->mpipe[instance].num_needed_buffers[kind]
 			       != 0) {
@@ -664,8 +669,13 @@ static int tile_net_poll(struct napi_struct *napi, int budget)
 			&info_mpipe->iqueue,
 			&idesc)) > 0) {
 		for (i = 0; i < n; i++) {
-			if (i == TILE_NET_BATCH)
+			if (i == TILE_NET_BATCH) {
+				/* Under budget without napi_complete_done() leaves NAPI scheduled
+				 * with nothing to poll it, and RX stops for good.
+				 */
+				work = budget;
 				goto done;
+			}
 			if (tile_net_handle_packet(instance,
 						   idesc + i)) {
 				if (++work >= budget)
@@ -788,8 +798,9 @@ static enum hrtimer_restart tile_net_handle_egress_timer(struct hrtimer *t)
 	info->egress_timer_scheduled = false;
 
 	/* Free all possible comps for this tile. */
-	for (instance = 0; instance < NR_MPIPE_MAX &&
-		     info->mpipe[instance].has_iqueue; instance++) {
+	for (instance = 0; instance < NR_MPIPE_MAX; instance++) {
+		if (!info->mpipe[instance].has_iqueue)
+			continue;
 		for (i = 0; i < TILE_NET_CHANNELS; i++) {
 			struct tile_net_egress *egress =
 				&mpipe_data[instance].egress_for_echannel[i];
@@ -1494,6 +1505,25 @@ static int tile_net_link_open(struct net_device *dev, gxio_mpipe_link_t *link,
 	return rc;
 }
 
+static void tile_net_link_poll(struct work_struct *work)
+{
+	struct tile_net_priv *priv =
+		container_of(to_delayed_work(work), struct tile_net_priv, link_work);
+	int64_t state = gxio_mpipe_link_get_attr(&priv->link,
+						 GXIO_MPIPE_LINK_CURRENT_STATE);
+	bool up = state > 0 && (state & GXIO_MPIPE_LINK_SPEED_MASK);
+
+	if (up != netif_carrier_ok(priv->dev)) {
+		netdev_info(priv->dev, "link %s\n", up ? "up" : "down");
+		if (up)
+			netif_carrier_on(priv->dev);
+		else
+			netif_carrier_off(priv->dev);
+	}
+
+	schedule_delayed_work(&priv->link_work, HZ);
+}
+
 /* Help the kernel activate the given network interface. */
 static int tile_net_open(struct net_device *dev)
 {
@@ -1567,7 +1597,10 @@ static int tile_net_open(struct net_device *dev)
 
 	for_each_online_cpu(cpu)
 		netif_start_subqueue(dev, cpu);
-	netif_carrier_on(dev);
+
+	netif_carrier_off(dev);
+	INIT_DELAYED_WORK(&priv->link_work, tile_net_link_poll);
+	schedule_delayed_work(&priv->link_work, 0);
 	return 0;
 
 fail:
@@ -1596,6 +1629,8 @@ static int tile_net_stop(struct net_device *dev)
 	int cpu;
 	int instance = priv->instance;
 	struct mpipe_data *md = &mpipe_data[instance];
+
+	cancel_delayed_work_sync(&priv->link_work);
 
 	for_each_online_cpu(cpu) {
 		struct tile_net_info *info = &per_cpu(per_cpu_info, cpu);
@@ -2166,6 +2201,9 @@ static void tile_net_setup(struct net_device *dev)
 	dev->features      |= features;
 }
 
+/* The mPIPE instances, as parents for their links' netdevs. */
+static struct platform_device *mpipe_pdev[NR_MPIPE_MAX];
+
 /* Allocate the device structure, register the device, and obtain the
  * MAC address from the hypervisor.
  */
@@ -2207,6 +2245,10 @@ static void tile_net_dev_init(const char *name, const uint8_t *mac)
 		eth_hw_addr_random(dev);
 
 	/* Register the network device. */
+	ret = gxio_mpipe_link_instance(name);
+	if (ret >= 0 && ret < NR_MPIPE_MAX && !IS_ERR_OR_NULL(mpipe_pdev[ret]))
+		SET_NETDEV_DEV(dev, &mpipe_pdev[ret]->dev);
+
 	ret = register_netdev(dev);
 	if (ret) {
 		netdev_err(dev, "register_netdev failed %d\n", ret);
@@ -2248,6 +2290,9 @@ static int __init tile_net_init_module(void)
 
 	/* Initialize each CPU. */
 	on_each_cpu(tile_net_init_module_percpu, NULL, 1);
+
+	for (i = 0; i < NR_MPIPE_MAX; i++)
+		mpipe_pdev[i] = platform_device_register_simple("mpipe", i, NULL, 0);
 
 	/* Find out what devices we have, and initialize them. */
 	for (i = 0; gxio_mpipe_link_enumerate_mac(i, name, mac) >= 0; i++)

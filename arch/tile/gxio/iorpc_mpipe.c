@@ -409,6 +409,24 @@ int gxio_mpipe_link_set_attr_aux(gxio_mpipe_context_t *context, int mac,
 
 EXPORT_SYMBOL(gxio_mpipe_link_set_attr_aux);
 
+struct link_get_attr_aux_param {
+	int64_t data;
+};
+
+int gxio_mpipe_link_get_attr_aux(gxio_mpipe_context_t *context,
+				 unsigned int off, int64_t *data)
+{
+	struct link_get_attr_aux_param temp;
+	int result = hv_dev_pread(context->fd, 0, (HV_VirtAddr) &temp,
+				  sizeof(temp), ((uint64_t) off << 32) |
+				  GXIO_MPIPE_OP_LINK_GET_ATTR_AUX);
+
+	*data = temp.data;
+	return result;
+}
+
+EXPORT_SYMBOL(gxio_mpipe_link_get_attr_aux);
+
 struct get_timestamp_aux_param {
 	uint64_t sec;
 	uint64_t nsec;

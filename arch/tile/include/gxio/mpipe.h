@@ -1818,6 +1818,9 @@ static inline int gxio_mpipe_link_channel(gxio_mpipe_link_t *link)
 extern int gxio_mpipe_link_set_attr(gxio_mpipe_link_t *link, uint32_t attr,
 				    int64_t val);
 
+extern int64_t gxio_mpipe_link_get_attr(gxio_mpipe_link_t *link,
+					uint32_t attr);
+
 ///////////////////////////////////////////////////////////////////
 //                             Timestamp                         //
 ///////////////////////////////////////////////////////////////////
