@@ -60,6 +60,11 @@ static inline void arch_spin_unlock(arch_spinlock_t *lock)
 
 void arch_spin_lock_slow(arch_spinlock_t *lock, u32 val);
 
+/* The lock fetchadd issues no mf, so try_to_wake_up() could read p->__state ahead of the waker's
+ * condition store and leave the wakee asleep.
+ */
+#define smp_mb__after_spinlock()	smp_mb()
+
 /* Grab the "next" ticket number and bump it atomically.
  * If the current ticket is not ours, go to the slow path.
  * We also take the slow path if the "next" value overflows.
