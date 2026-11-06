@@ -141,6 +141,17 @@ config TILE_TMFIFO
 	  via the tile-monitor FIFO hardware, typically as /dev/tmfifo/0.
 	  The tile-side shepherd agent used by tile-monitor requires it.
 
+config TILE_SROM
+	tristate "Character-device access via hypervisor to the Tilera SPI ROM"
+	depends on TILEGX
+	default y
+	help
+	  This device provides character-level read-write access
+	  to the SROM, typically via the "0", "1", and "2" devices
+	  in /dev/srom/.  The Tilera hypervisor makes the flash
+	  device appear much like a simple EEPROM, and knows
+	  how to partition a single ROM for multiple purposes.
+
 source "drivers/char/ipmi/Kconfig"
 
 config DS1620
